@@ -1,71 +1,56 @@
-<div align="center">
-    <img src="/img/README-decorator.png" width=300/><br/>
-    <a href="https://github.com/AllJavi/tartarus-startpage/stargazers">
-        <img src="https://img.shields.io/github/stars/AllJavi/tartarus-startpage?color=a9b665&style=for-the-badge&logo=starship">
-    </a>
-    <a href="https://github.com/AllJavi/tartarus-startpage/issues">
-        <img src="https://img.shields.io/github/issues/AllJavi/tartarus-startpage?color=ea6962&style=for-the-badge&logo=codecov">
-    </a>
-    <a href="https://github.com/AllJavi/tartarus-startpage/network/members">
-        <img src="https://img.shields.io/github/forks/AllJavi/tartarus-startpage?color=7daea3&style=for-the-badge&logo=jfrog-bintray">
-    </a>
-    <a href="https://github.com/AllJavi/tartarus-startpage/blob/master/LICENSE">
-        <img src="https://img.shields.io/badge/license-MIT-orange.svg?color=d4be98&style=for-the-badge&logo=archlinux">
-    </a>
-</div>
+# MyDashboard 🚀
 
-## 💻 Preview
+Персональный дашборд на базе Electron, объединяющий Discord, YouTube и Gemini в одном окне. Удобное решение для управления рабочим пространством без лишних вкладок в браузере.
 
-https://github.com/AllJavi/tartarus-startpage/assets/49349604/9a2a3f4c-33ef-4eb3-9243-cc160a56a181
+## 📸 Скриншоты
+**Стартовый экран**
+<img width="1915" height="991" alt="изображение" src="https://github.com/user-attachments/assets/476778a8-b5df-4411-a308-6b1cc9b2d1ee" />
 
-This start page is based on the [dawn](https://github.com/b-coimbra/dawn) repository, which has even more functionality. I've tweaked the page's style a bit to match my [dotfiles](https://github.com/AllJavi/tartarus-dotfiles), and I've added some features to make it more comfortable.
+**Меню настроек оформления**
+<img width="1918" height="987" alt="изображение" src="https://github.com/user-attachments/assets/713381ed-5fd0-47d4-bb9e-160e6b1e1b40" />
 
-## ⌨️ Keybindings
-| Hotkey                                            | Action                      |
-| ------------------------------------------------- | --------------------------- |
-| <kbd>Numrow</kbd> \| <kbd>MouseWheel</kbd> \| <kbd>Click</kbd> | Switch tabs            |
-| <kbd>s</kbd>                           | Search Dialog            |
-| <kbd>q</kbd>                           | Config Dialog (new)           |
-| <kbd>Esc</kbd>                           | Close Dialogs            |
+**Вид компактной версии сайтов прямо на стартовой странице**
+<img width="1916" height="987" alt="изображение" src="https://github.com/user-attachments/assets/8adae015-29b4-4d3e-b430-3805a1ed892a" />
 
-## ⚙️ Configuration Dialog
-![config-dialog](https://github.com/AllJavi/tartarus-startpage/assets/49349604/3b42c650-b5bb-4a7d-a358-cfa5a8915966)
+**Вид открытого сайта**
+<img width="1915" height="986" alt="изображение" src="https://github.com/user-attachments/assets/f3108180-6dfd-4ea3-9040-38a950aef8bf" />
 
-The default configuration file is [userconfig.js](userconfig.js), but you can change it in the configuration dialog. You can find more information about how the file works in the [original repository](https://github.com/b-coimbra/dawn). The available components are tabs, a clock, and weather.
+**Меню загрузки куков через JSON и смены User Agent**
+<img width="1547" height="767" alt="изображение" src="https://github.com/user-attachments/assets/4fb8040a-4647-4ed8-9032-0910a132569b" />
 
-Additionally, there are two different new options:
-- `fastlink`: To set the link of the Pokeball button.
-- `localIcons`: To optimize the loading time of the icons, you can check it out [here](#local-icons).
 
-## 🔍 Search Dialog
-![search-dialog](https://github.com/AllJavi/tartarus-startpage/assets/49349604/3f76323d-88c4-41b6-b93d-e4cceb1780b7)
+## 📖 Подробная инструкция (для пользователей)
 
-The search dialog allows you to display a search bar with various search engines defined in the configuration. To select each one, you simply need to prefix the query with the corresponding `!<id>`.
-By default, the defined search engines are:
-- `!g`: google
-- `!d`: duckduckgo
-- `!y`: youtube
-- `!r`: reddit
-- `!p`: pinterest
+### 1. Как запускать сайты
+* **Навигация:** В нижней части окна расположены иконки сервисов (YouTube, Discord, Gemini). Нажмите **ЛКМ** для быстрого переключения.
+* **Мини-версии:** На стартовом экране можно открыть мобильную версию сайта прямо в маленьком окне, нажав на иконку **ПКМ**.
+* **Полная версия:** Нажмите **ЛКМ** по иконке на стартовом экране для открытия сайта во все окно.
+* **Статус-бар:** Для управления окнами используйте статус-бар: **ЛКМ** — свернуть/развернуть, **ПКМ** — закрыть окно и выгрузить сайт из памяти.
 
-## 🖼 Available banners
-|cbg-2|cbg-3|cbg-4|cbg-5|
-| ------------- | ------------- | ------------- | ------------- | 
-|<img src="src/img/banners/cbg-2.gif" width=175>|<img src="src/img/banners/cbg-3.gif" width=175>|<img src="src/img/banners/cbg-4.gif" width=175>|<img src="src/img/banners/cbg-5.gif" width=175>|
+### 2. Управление и горячие клавиши
+* **Меню управления:** Нажмите клавишу **Alt**, чтобы вызвать верхнюю панель (Файл, Вид, Настройки).
+* **Обновить страницу:** Если сайт завис, нажмите **Ctrl + R**.
+* **Разработчикам:** Открыть консоль отладки можно через **Ctrl + Shift + I**.
 
-|cbg-6|cbg-7|cbg-8|cbg-9|
-| ------------- | ------------- | ------------- | ------------- |
-|<img src="src/img/banners/cbg-6.gif" width=175>|<img src="src/img/banners/cbg-7.gif" width=175>|<img src="src/img/banners/cbg-8.gif" width=175>|<img src="src/img/banners/cbg-9.gif" width=175>|
+### 3. Работа через прокси
+* Программа поддерживает работу через прокси (настройки задаются в `main.js`). Это позволяет обходить региональные ограничения для встроенных сервисов.
 
-|cbg-10|cbg-11|cbg-12|cbg-13|
-| ------------- | ------------- | ------------- | ------------- |
-|<img src="src/img/banners/cbg-10.gif" width=175>|<img src="src/img/banners/cbg-11.gif" width=175>|<img src="src/img/banners/cbg-12.gif" width=175>|<img src="src/img/banners/cbg-13.gif" width=175>|
+### 4. Возможные проблемы с авторизацией в Google
+* **Решение:** В меню управления выберите агент **"mobile"**, откройте Google Drive в отдельном окне (нажатием на **колёсико мыши**) и выполните вход. После этого авторизация сохранится для остальных сервисов.
 
-## Local Icons
-If you want to reduce the loading time of the icons, you could install the [icon font](https://github.com/AllJavi/tartarus-startpage/tree/master/src/fonts) locally and activate the option `"localIcons": true` in the config to disable the remote styles.
+## ✨ Основные возможности
+* **Мультизадачность:** Быстрый доступ к мессенджеру, видеохостингу и ИИ в одном интерфейсе.
+* **Proxy Support:** Встроенная поддержка прокси-серверов.
+* **Кастомизация:** Гибкая настройка внешнего вида и User Agent.
 
-## Credit
-- [Dawn Startpage](https://github.com/b-coimbra/dawn) ([preview](https://startpage.metaphoric.dev/))
+## 🛠 Установка и запуск
 
-## License
-[MIT License](./LICENSE)
+### Для пользователей (Windows)
+1. Перейдите в раздел [Releases](https://github.com/FailouN/my-dashboard-app/releases).
+2. Скачайте `MyDashboard Setup.exe`.
+3. Установите и запустите приложение.
+
+### Для разработчиков
+1. Склонируйте репозиторий: `git clone https://github.com/FailouN/my-dashboard-app`
+2. Установите зависимости: `npm install`
+3. Запуск: `npm start`
