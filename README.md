@@ -7,6 +7,25 @@
 
 Оптимизирован под работу с ограниченным набором сервисов.
 
+## 📸 Превью
+<div align="center">
+  <video width="100%" controls autoplay loop muted style="border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+    <source src="https://github.com/FailouN/WebHub_Desktop/releases/download/v1.0.1/Video.Project.1.mp4" type="video/mp4">
+    Ваш браузер не поддерживает видео.
+  </video>
+</div>
+
+
+<video width="100%" controls autoplay loop muted poster="https://github.com/user-attachments/assets/476778a8-b5df-44d3-a7b5-de7c1638bfa4">
+  <source src="ССЫЛКА_НА_ВАШЕ_ВИДЕО" type="video/mp4">
+  Ваш браузер не поддерживает встроенные видео.
+</video>
+
+
+
+
+
+
 ## 📸 Скриншоты
 **Стартовый экран**
 <img width="1915" height="991" alt="изображение" src="https://github.com/user-attachments/assets/476778a8-b5df-4411-a308-6b1cc9b2d1ee" />
