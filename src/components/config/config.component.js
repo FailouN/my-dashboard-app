@@ -146,12 +146,18 @@ class ConfigTab extends Component {
 
         <div class="field-group">
             <label>Баннер страницы (картинка слева):</label>
-            <input type="text" class="cfg-tab-bg" data-tab="${tabIdx}" value="${tab.background_url || ''}">
+            <div style="display: flex; gap: 10px;">
+                <input type="text" class="cfg-tab-bg" data-tab="${tabIdx}" value="${tab.background_url || ''}" style="flex: 1;">
+                <button class="btn-browse" data-target="cfg-tab-bg" data-tab="${tabIdx}" style="padding: 0 10px; background: #504945; color: #d4be98; border: 1px solid #7c6f64; cursor: pointer; border-radius: 4px; font-size: 10px;">ОБЗОР</button>
+            </div>
         </div>
 
         <div class="field-group">
             <label>Фон ссылок (картинка справа):</label>
-            <input type="text" class="cfg-tab-links-bg" data-tab="${tabIdx}" value="${tab.links_background || ''}">
+            <div style="display: flex; gap: 10px;">
+                <input type="text" class="cfg-tab-links-bg" data-tab="${tabIdx}" value="${tab.links_background || ''}" style="flex: 1;">
+                <button class="btn-browse" data-target="cfg-tab-links-bg" data-tab="${tabIdx}" style="padding: 0 10px; background: #504945; color: #d4be98; border: 1px solid #7c6f64; cursor: pointer; border-radius: 4px; font-size: 10px;">ОБЗОР</button>
+            </div>
         </div>
 
         <div class="field-group">
@@ -174,13 +180,20 @@ class ConfigTab extends Component {
             <input type="text" class="cfg-cat-name" data-tab="${tabIdx}" data-cat="${catIdx}" value="${category.name}" style="width: 100%; margin-bottom: 10px;">
             
             <label style="font-size: 8pt; color: #7c6f64;">Ссылки (Имя | Иконка | URL):</label>
+            
             ${category.links.map((link, linkIdx) => `
               <div class="link-edit-row" style="display: flex; gap: 5px; margin-bottom: 8px;">
-                <input type="text" class="cfg-link-name" data-tab="${tabIdx}" data-cat="${catIdx}" data-link="${linkIdx}" value="${link.name}" placeholder="Имя" style="flex: 1;">
+                <input type="text" class="cfg-link-name" data-tab="${tabIdx}" data-cat="${catIdx}" data-link="${linkIdx}" value="${link.name}" placeholder="Имя (пусто для удаления)" style="flex: 1;">
                 <input type="text" class="cfg-link-icon" data-tab="${tabIdx}" data-cat="${catIdx}" data-link="${linkIdx}" value="${link.icon}" placeholder="Иконка" style="flex: 1;">
                 <input type="text" class="cfg-link-url" data-tab="${tabIdx}" data-cat="${catIdx}" data-link="${linkIdx}" value="${link.url}" placeholder="URL" style="flex: 2;">
               </div>
             `).join('')}
+
+            <div class="link-edit-row new-link-row" style="display: flex; gap: 5px; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #504945;">
+                <input type="text" class="cfg-link-name-new" data-tab="${tabIdx}" data-cat="${catIdx}" placeholder="+ Добавить имя" style="flex: 1; background: #3c3836;">
+                <input type="text" class="cfg-link-icon-new" data-tab="${tabIdx}" data-cat="${catIdx}" placeholder="Иконка" style="flex: 1; background: #3c3836;">
+                <input type="text" class="cfg-link-url-new" data-tab="${tabIdx}" data-cat="${catIdx}" placeholder="URL" style="flex: 2; background: #3c3836;">
+            </div>
           </div>
         `).join('')}
       </div>
@@ -203,7 +216,10 @@ class ConfigTab extends Component {
               </div>
               <div class="field-group" style="grid-column: span 2;">
                   <label>Задний фон приложения (background.png):</label>
-                  <input type="text" id="cfg-global-image" value="${CONFIG.config.image || ''}">
+                  <div style="display: flex; gap: 10px;">
+                    <input type="text" id="cfg-global-image" value="${CONFIG.config.image || ''}" style="flex: 1;">
+                    <button class="btn-browse" data-target="cfg-global-image" style="padding: 0 15px; background: #504945; color: #d4be98; border: 1px solid #7c6f64; cursor: pointer; border-radius: 4px;">ОБЗОР</button>
+                  </div>
               </div>
             </div>
 
@@ -218,7 +234,7 @@ class ConfigTab extends Component {
           </div>
         </div>
     `;
-  }
+}
 
   activate() {
     this.refs.config.classList.add('active');
@@ -228,63 +244,96 @@ class ConfigTab extends Component {
     this.refs.config.classList.remove('active');
   }
 
- saveConfig() {
-    const newConfig = JSON.parse(JSON.stringify(CONFIG.config));
+saveConfig() {
+    // 1. Берем текущий конфиг из localStorage, если он там есть. 
+    // Если нет - берем дефолтный из CONFIG.config.
+    const saved = localStorage.getItem("CONFIG");
+    let newConfig = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(CONFIG.config));
 
-    // 1. Погода, Цвет и Глобальный фон
-    newConfig.temperature.location = this.shadowRoot.getElementById('cfg-location').value;
-    newConfig.clock.iconColor = this.shadowRoot.getElementById('cfg-clock-color').value;
-    newConfig.image = this.shadowRoot.getElementById('cfg-global-image').value;
+    // 2. Считываем Глобальные настройки
+    // Используем опциональную цепочку ?. на случай, если элементов нет в DOM
+    const locationVal = this.shadowRoot.getElementById('cfg-location')?.value;
+    const clockColorVal = this.shadowRoot.getElementById('cfg-clock-color')?.value;
+    const globalImageVal = this.shadowRoot.getElementById('cfg-global-image')?.value;
 
-    // 2. Названия вкладок и баннеры
+    if (locationVal !== undefined) newConfig.temperature.location = locationVal;
+    if (clockColorVal !== undefined) newConfig.clock.iconColor = clockColorVal;
+    if (globalImageVal !== undefined) newConfig.image = globalImageVal;
+
+    // 3. Обновляем настройки вкладок
     this.shadowRoot.querySelectorAll('.cfg-tab-name').forEach(i => {
-        newConfig.tabs[i.dataset.tab].name = i.value;
+        if(newConfig.tabs[i.dataset.tab]) newConfig.tabs[i.dataset.tab].name = i.value;
     });
-    
     this.shadowRoot.querySelectorAll('.cfg-tab-bg').forEach(i => {
-        newConfig.tabs[i.dataset.tab].background_url = i.value;
+        if(newConfig.tabs[i.dataset.tab]) newConfig.tabs[i.dataset.tab].background_url = i.value;
     });
-
     this.shadowRoot.querySelectorAll('.cfg-tab-links-bg').forEach(i => {
-         newConfig.tabs[i.dataset.tab].links_background = i.value;
+        if(newConfig.tabs[i.dataset.tab]) newConfig.tabs[i.dataset.tab].links_background = i.value;
     });
-
-    // 3. Названия папок (категорий)
-    this.shadowRoot.querySelectorAll('.cfg-cat-name').forEach(i => {
-        newConfig.tabs[i.dataset.tab].categories[i.dataset.cat].name = i.value;
-    });
-
-    // --- ВОТ ЭТОТ БЛОК НУЖНО ДОБАВИТЬ ДЛЯ ССЫЛОК ---
-    // Сохраняем имена ссылок
-    this.shadowRoot.querySelectorAll('.cfg-link-name').forEach(i => {
-        const d = i.dataset; 
-        newConfig.tabs[d.tab].categories[d.cat].links[d.link].name = i.value;
-    });
-    // Сохраняем иконки ссылок
-    this.shadowRoot.querySelectorAll('.cfg-link-icon').forEach(i => {
-        const d = i.dataset; 
-        newConfig.tabs[d.tab].categories[d.cat].links[d.link].icon = i.value;
-    });
-    // Сохраняем URL ссылок
-    this.shadowRoot.querySelectorAll('.cfg-link-url').forEach(i => {
-        const d = i.dataset; 
-        newConfig.tabs[d.tab].categories[d.cat].links[d.link].url = i.value;
-    });
- 
     this.shadowRoot.querySelectorAll('.cfg-tab-blur').forEach(i => {
-    newConfig.tabs[i.dataset.tab].links_blur = i.value;
+        if(newConfig.tabs[i.dataset.tab]) newConfig.tabs[i.dataset.tab].links_blur = i.value;
     });
-
-    // Сохраняем затемнение
     this.shadowRoot.querySelectorAll('.cfg-tab-opacity').forEach(i => {
-    newConfig.tabs[i.dataset.tab].links_opacity = i.value;
+        if(newConfig.tabs[i.dataset.tab]) newConfig.tabs[i.dataset.tab].links_opacity = i.value;
     });
-    // -----------------------------------------------
 
+    // 4. ПЕРЕСБОРКА КАТЕГОРИЙ И ССЫЛОК
+    newConfig.tabs.forEach((tab, tabIdx) => {
+        tab.categories.forEach((cat, catIdx) => {
+            // Обновляем название категории
+            const catNameInput = this.shadowRoot.querySelector(`.cfg-cat-name[data-tab="${tabIdx}"][data-cat="${catIdx}"]`);
+            if (catNameInput) cat.name = catNameInput.value;
+
+            const updatedLinks = [];
+
+            // Собираем существующие ссылки
+            const rows = this.shadowRoot.querySelectorAll(`.cfg-link-name[data-tab="${tabIdx}"][data-cat="${catIdx}"]`);
+            rows.forEach((input) => {
+                const linkIdx = input.dataset.link;
+                const name = input.value.trim();
+                const icon = this.shadowRoot.querySelector(`.cfg-link-icon[data-tab="${tabIdx}"][data-cat="${catIdx}"][data-link="${linkIdx}"]`)?.value.trim();
+                const url = this.shadowRoot.querySelector(`.cfg-link-url[data-tab="${tabIdx}"][data-cat="${catIdx}"][data-link="${linkIdx}"]`)?.value.trim();
+
+                if (name !== "" && url !== "") {
+    updatedLinks.push({ 
+        name, 
+        icon: icon, // Сохраняем как есть (пустоту в том числе)
+        url 
+    });
+                }
+            });
+
+            // Проверяем поля для НОВОЙ ссылки
+            const newNameInput = this.shadowRoot.querySelector(`.cfg-link-name-new[data-tab="${tabIdx}"][data-cat="${catIdx}"]`);
+            const newIconInput = this.shadowRoot.querySelector(`.cfg-link-icon-new[data-tab="${tabIdx}"][data-cat="${catIdx}"]`);
+            const newUrlInput = this.shadowRoot.querySelector(`.cfg-link-url-new[data-tab="${tabIdx}"][data-cat="${catIdx}"]`);
+
+            if (newNameInput && newUrlInput) {
+                const newName = newNameInput.value.trim();
+                const newUrl = newUrlInput.value.trim();
+                const newIcon = newIconInput ? newIconInput.value.trim() : "";
+
+               if (newName !== "" && newUrl !== "") {
+    updatedLinks.push({ 
+        name: newName, 
+        icon: newIcon, // Сохраняем как есть
+        url: newUrl 
+    });
+                }
+            }
+
+            cat.links = updatedLinks;
+        });
+    });
+
+    // 5. Финальное сохранение
     localStorage.setItem("CONFIG", JSON.stringify(newConfig));
-    location.reload();
-  }
-
+    
+    // Даем небольшую задержку перед перезагрузкой, чтобы localStorage успел записаться (для надежности)
+    setTimeout(() => {
+        location.reload();
+    }, 100);
+}
   setEvents() {
     this.refs.config.onkeyup = (e) => { if (e.key === 'Escape') this.deactivate(); };
     this.shadowRoot.querySelector('.close').onclick = () => this.deactivate();
@@ -296,6 +345,40 @@ class ConfigTab extends Component {
             location.reload();
         }
     };
+    // Используем window.require для надежности в Electron
+    const electron = window.require ? window.require('electron') : null;
+    if (!electron) return;
+    const { ipcRenderer } = electron;
+
+    this.shadowRoot.querySelectorAll('.btn-browse').forEach(btn => {
+        btn.onclick = async () => {
+            const targetId = btn.dataset.target;
+            const tabIdx = btn.dataset.tab;
+            
+            let input;
+            // Улучшенный поиск инпута
+            if (tabIdx !== undefined) {
+                input = this.shadowRoot.querySelector(`.${targetId}[data-tab="${tabIdx}"]`);
+            } else {
+                input = this.shadowRoot.getElementById(targetId);
+            }
+
+            if (!input) {
+                console.error("Input not found for target:", targetId);
+                return;
+            }
+
+            // Вызываем диалог
+            const newPath = await ipcRenderer.invoke('select-file');
+            
+            if (newPath) {
+                input.value = newPath;
+                input.style.borderColor = '#a9b665';
+                // Важно: генерируем событие input, чтобы сработали другие обработчики, если они есть
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
+    });
   }
 
   setConfig() {

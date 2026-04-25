@@ -1,14 +1,14 @@
 {
   "name": "WebHub_Desktop",
-  "version": "1.9.9",
+  "version": "2.0.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.my.dashboard",
-    "productName": "MyDashboard",
+    "appId": "com.WebHub.Desktop",
+    "productName": "WebHub_Desktop",
     "directories": {
       "output": "dist"
     },

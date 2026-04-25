@@ -1,0 +1,11 @@
+.log/
+node_modules
+node_modules
+dist
+*.zip
+*.exe
+project_code.txt
+DATA_LINK
+project_code.txt
+project_code.txt
+project_code.txt

@@ -234,6 +234,30 @@ class Statusbar extends Component {
       .fastlink-icon {
 	      width: 70%;
       }
+      cols {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0 10px;
+}
+
+.col-end {
+    margin-left: auto; /* Это магическая строка, которая толкает блок вправо */
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Расстояние между иконкой закладок и часами */
+}
+
+.bookmark-trigger {
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.bookmark-trigger:hover {
+    opacity: 1;
+}
     `;
   }
 
@@ -246,6 +270,9 @@ class Statusbar extends Component {
               </button>
               <ul class="- indicator"></ul>
               <div class="+ widgets col-end">
+                 <button class="widget bookmark-trigger" title="Закладки" style="background:none; border:none; color:inherit; cursor:pointer;">
+    <i class="material-icons">bookmarks</i>
+</button>
                   <current-time class="+ widget"></current-time>
                   <weather-forecast class="+ widget weather"></weather-forecast>
               </div>
@@ -257,6 +284,15 @@ class Statusbar extends Component {
     this.refs.tabs.forEach((tab) =>
       tab.onclick = ({ target }) => this.handleTabChange(target)
     );
+    const btn = this.shadowRoot.querySelector('.bookmark-trigger');
+if (btn) {
+    btn.onclick = () => {
+        this.dispatchEvent(new CustomEvent('toggle-bookmarks', {
+            bubbles: true,
+            composed: true
+        }));
+    };
+}
 
     document.onkeydown = (e) => this.handleKeyPress(e);
     document.onwheel = (e) => this.handleWheelScroll(e);
@@ -274,8 +310,12 @@ class Statusbar extends Component {
   }
 
   saveCurrentTab() {
-    localStorage.lastVisitedTab = this.currentTabIndex;
+  // Сохраняем имя активной вкладки (например, "Dev", "Social")
+  const activeTab = this.tabs[this.currentTabIndex];
+  if (activeTab) {
+    localStorage.setItem("lastTabKey", activeTab.name);
   }
+}
 
   openLastVisitedTab() {
     if (!CONFIG.openLastVisitedTab) return;

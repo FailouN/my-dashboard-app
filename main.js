@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, desktopCapturer, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, session, desktopCapturer, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -9,7 +9,7 @@ const fetch = require('cross-fetch');
 
 
 // Реальный путь к данным в профиле пользователя (%APPDATA%)
-const userDataPath = path.join(app.getPath('appData'), 'my-dashboard-app-profile');
+const userDataPath = path.join(app.getPath('appData'), 'WebHub-Desktop-profile');
 
 // Путь для папки-ссылки в директории программы
 const linkPath = path.join(process.cwd(), 'DATA_LINK'); 
@@ -117,10 +117,76 @@ function setUserAgent(type) {
     console.log(`User-Agent changed to: ${type}`);
 }
 
+
+// 1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И ФУНКЦИИ ПРОКСИ (Вынеси их сюда)
+const proxyBypassPath = path.join(userDataPath, 'proxy_bypass.json');
+
+function applyProxySettings() {
+    let bypassList = "vk.com, m.vk.com, google.com, yandex.ru, mail.yandex.ru, kinopoisk.ru, www.kinopoisk.ru, disk.yandex.ru, 2ip.ru, ya.ru, mail.ru";
+    
+    if (fs.existsSync(proxyBypassPath)) {
+        try {
+            const saved = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
+            if (Array.isArray(saved) && saved.length > 0) {
+                bypassList += ", " + saved.join(", ");
+            }
+        } catch (e) { console.error("Proxy file error:", e); }
+    }
+
+    const proxyConfig = {
+        proxyRules: "http://77.239.104.196:8888",
+        proxyBypassRules: bypassList
+    };
+
+    return session.defaultSession.setProxy(proxyConfig)
+        .then(() => console.log('Proxy applied. Bypass:', bypassList))
+        .catch(err => console.error('Proxy setup error:', err));
+}
+
+// 2. ОБРАБОТЧИКИ IPC (Тоже глобально)
+ipcMain.on('save-proxy-domain', (event, domain) => {
+    let list = [];
+    if (fs.existsSync(proxyBypassPath)) {
+        try { list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8')); } catch(e){}
+    }
+    if (!list.includes(domain)) {
+        list.push(domain);
+        fs.writeFileSync(proxyBypassPath, JSON.stringify(list));
+        applyProxySettings();
+        createApplicationMenu();
+    }
+});
+
+ipcMain.on('delete-proxy-domain', (event, domain) => {
+    if (fs.existsSync(proxyBypassPath)) {
+        try {
+            let list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
+            list = list.filter(d => d !== domain);
+            fs.writeFileSync(proxyBypassPath, JSON.stringify(list));
+            applyProxySettings();
+            createApplicationMenu();
+        } catch (e) { console.error(e); }
+    }
+});
+
+function getSavedProxyDomains() {
+    if (fs.existsSync(proxyBypassPath)) {
+        try {
+            const data = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
+            return Array.isArray(data) ? data : [];
+        } catch (e) {
+            console.error("Ошибка чтения файла исключений:", e);
+            return [];
+        }
+    }
+    return [];
+}
+
 /**
  * СОЗДАНИЕ ПРИКЛАДНОГО МЕНЮ
  */
 function createApplicationMenu() {
+    const savedDomains = getSavedProxyDomains();
     const template = [
         {
             label: 'Аккаунты',
@@ -139,6 +205,45 @@ function createApplicationMenu() {
                 { type: 'separator' },
                 { role: 'reload', label: 'Перезагрузить страницу' },
                 { role: 'quit', label: 'Выход' }
+            ]
+        },
+       {
+            label: 'Прокси',
+            submenu: [
+                {
+                    label: 'Добавить текущий сайт в исключения',
+                    click: () => {
+                        const win = BrowserWindow.getFocusedWindow();
+                        if (win) win.webContents.send('get-current-domain-for-proxy');
+                    }
+                },
+                {
+                    label: 'Удалить из исключений',
+                    // Кнопка будет неактивна, если список пуст
+                    enabled: savedDomains.length > 0, 
+                    submenu: savedDomains.map(domain => {
+                        return {
+                            label: domain,
+                            click: () => {
+                                // Вызываем удаление конкретного домена
+                                // Мы имитируем вызов IPC события
+                                ipcMain.emit('delete-proxy-domain', {}, domain);
+                            }
+                        };
+                    })
+                },
+                { type: 'separator' },
+                {
+                    label: 'Очистить весь список',
+                    click: () => {
+                        if (fs.existsSync(proxyBypassPath)) {
+                            fs.unlinkSync(proxyBypassPath);
+                            applyProxySettings();
+                            createApplicationMenu(); // Обновляем меню после очистки
+                            dialog.showMessageBox({ message: "Список исключений очищен" });
+                        }
+                    }
+                }
             ]
         },
         {
@@ -194,6 +299,15 @@ async function createWindow() {
         }
     });
 
+win.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') {
+        const isFullScreen = win.isFullScreen();
+        win.setFullScreen(!isFullScreen);
+        // Скрываем/показываем меню вместе с полноэкранным режимом
+        win.setMenuBarVisibility(isFullScreen); 
+    }
+});
+
 // Создание символьной ссылки (DATA_LINK)
     if (!fs.existsSync(linkPath)) {
         const command = `mklink /D "${linkPath}" "${userDataPath}"`;
@@ -243,6 +357,10 @@ setupBlocker(); // Запускаем в фоне
     // Находим место, где были старые строки, и пишем:
      setUserAgent('desktop');
 
+     applyProxySettings().then(() => {
+        win.loadFile('index.html');
+    });
+
 
     // Обработчик выбора экрана (Screen Sharing)
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -274,19 +392,6 @@ setupBlocker(); // Запускаем в фоне
             }
         });
     });
-
-    // Настройка Прокси
-    const proxyConfig = {
-        proxyRules: "http://77.239.104.196:8888",
-        proxyBypassRules: "vk.com, m.vk.com, google.com, yandex.ru, mail.yandex.ru, kinopoisk.ru, www.kinopoisk.ru, disk.yandex.ru, 2ip.ru, ya.ru, mail.ru, *.my-local-site.ru"
-    };
-    session.defaultSession.setProxy(proxyConfig)
-        .then(() => {
-            console.log('Proxy configured.');
-            win.loadFile('index.html');
-        })
-        .catch((err) => console.error('Proxy error:', err));
-   
        
 
     // Снятие защиты заголовков (CORS/X-Frame)
@@ -319,7 +424,47 @@ app.on('login', (event, webContents, request, authInfo, callback) => {
     }
 });
 
+ipcMain.handle('select-file', async () => {
+    // 1. Получаем окно для модальности
+    const win = BrowserWindow.getFocusedWindow();
+    
+    // 2. Открываем диалог выбора файла
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['jpg', 'png', 'gif', 'webp', 'jpeg'] }]
+    });
 
+    if (canceled || filePaths.length === 0) return null;
+
+    const sourcePath = filePaths[0];
+    
+    // 3. Получаем путь к папке данных пользователя (AppData/Roaming/название_вашего_апп)
+    const userDataPath = app.getPath('userData');
+    const assetsFolder = path.join(userDataPath, 'user_assets');
+
+    // 4. Проверяем, существует ли папка, если нет — создаем
+    if (!fs.existsSync(assetsFolder)) {
+        fs.mkdirSync(assetsFolder, { recursive: true });
+    }
+
+    // 5. Формируем конечное имя и путь
+    const fileName = Date.now() + "_" + path.basename(sourcePath);
+    const destPath = path.join(assetsFolder, fileName);
+    
+    try {
+        // 6. Копируем файл
+        fs.copyFileSync(sourcePath, destPath);
+        
+        // 7. Возвращаем путь. 
+        // ВАЖНО: Добавляем протокол file://, чтобы Electron/Chrome разрешил загрузку
+        const finalPath = `file://${destPath.replace(/\\/g, '/')}`;
+        console.log("Файл сохранен в:", finalPath);
+        return finalPath; 
+    } catch (err) {
+        console.error("Ошибка при копировании файла:", err);
+        return null;
+    }
+});
 // Запуск приложения
 app.whenReady().then(() => {
     createApplicationMenu(); // Инициализируем меню

@@ -6,10 +6,22 @@ class Links extends Component {
   static getIcon(link) {
     const defaultColor = "#726f6f";
 
-    return link.icon
-      ? `<i class="ti ti-${link.icon} link-icon"
-            style="color: ${link.icon_color ?? defaultColor}"></i>`
-      : "";
+    // Если иконка задана в конфиге — рисуем системную иконку
+    if (link.icon && link.icon.trim() !== "") {
+        return `<i class="ti ti-${link.icon} link-icon"
+                style="color: ${link.icon_color ?? defaultColor}"></i>`;
+    } 
+    
+    // Если иконки нет — берем фавиконку домена
+    try {
+        const domain = new URL(link.url).hostname;
+        return `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" 
+                     class="link-icon" 
+                     style="width: 24px; height: 24px; object-fit: contain; margin-bottom: 2px;">`;
+    } catch (e) {
+        // Если URL кривой, просто ставим заглушку
+        return `<i class="ti ti-link link-icon"></i>`;
+    }
   }
 
   static getAll(tabName, tabs) {
@@ -99,6 +111,58 @@ class Tabs extends Component {
     ];
   }
 
+// 1. Делаем это методом класса
+  saveBookmark = () => {
+    const root = this.shadowRoot;
+    const fullContainer = root.getElementById('full-container');
+    const panel = root.getElementById('preview-panel');
+    const frame = root.getElementById('preview-frame');
+
+    let currentUrl = "";
+    if (this.activeWindowId) {
+        const activeFrame = fullContainer.querySelector(`webview[data-id="${this.activeWindowId}"]`);
+        if (activeFrame) currentUrl = activeFrame.getURL();
+    } else if (panel && panel.style.display === 'flex') {
+        currentUrl = frame.getURL();
+    }
+
+    if (currentUrl && currentUrl !== "about:blank") {
+        let bookmarks = JSON.parse(localStorage.getItem('user-bookmarks') || '[]');
+        if (!bookmarks.includes(currentUrl)) {
+            bookmarks.push(currentUrl);
+            localStorage.setItem('user-bookmarks', JSON.stringify(bookmarks));
+            // Вместо alert можно вывести уведомление в лог
+            console.log("Закладка сохранена:", currentUrl);
+            this.renderBookmarks(); 
+        }
+    }
+  };
+
+  // 2. Метод отрисовки тоже выносим в класс
+  renderBookmarks = () => {
+    const bookmarksMenu = this.shadowRoot.getElementById('bookmarks-menu');
+    if (!bookmarksMenu) return;
+
+    const bookmarks = JSON.parse(localStorage.getItem('user-bookmarks') || '[]');
+    bookmarksMenu.innerHTML = bookmarks.map(url => {
+        const domain = new URL(url).hostname;
+        return `
+            <div class="bookmark-item" data-url="${url}">
+                <img src="https://www.google.com/s2/favicons?sz=32&domain=${domain}">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${domain}</span>
+            </div>
+        `;
+    }).join('');
+
+    bookmarksMenu.querySelectorAll('.bookmark-item').forEach(el => {
+        el.onclick = () => {
+            this.openNewWindow(el.dataset.url); // Убедись, что openNewWindow тоже метод класса
+            bookmarksMenu.style.display = 'none';
+        };
+    });
+  };
+
+  
   style() {
     return `
     #links {
@@ -547,9 +611,12 @@ status-bar {
       }
 
       .categories .link-icon {
-          font-size: 27px;
-          color: #726f6f;
-      }
+    font-size: 27px;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
       .categories .link-icon + .link-name {
           margin-left: 10px;
@@ -649,7 +716,6 @@ webview::-webkit-scrollbar {
     background: transparent;
 }
 
-* Прячем скроллбар для контейнеров */
 #full-container, #preview-frame {
     scrollbar-width: none; /* Для Firefox */
     -ms-overflow-style: none; /* Для IE/Edge */
@@ -658,6 +724,77 @@ webview::-webkit-scrollbar {
 #full-container::-webkit-scrollbar,
 #preview-frame::-webkit-scrollbar {
     display: none;
+}
+
+/* Стили меню закладок (Трей) */
+#bookmarks-menu {
+    display: none;
+    position: fixed;
+    bottom: 60px;
+    right: 20px;
+    width: 250px;
+    background: rgba(26, 27, 38, 0.95);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 10005;
+    padding: 10px 0;
+    flex-direction: column;
+}
+
+.bookmark-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    color: #d4be98;
+    text-decoration: none;
+    font-size: 13px;
+    transition: background 0.2s;
+    cursor: pointer;
+}
+
+.bookmark-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.bookmark-item img {
+    width: 16px;
+    height: 16px;
+    margin-right: 10px;
+}
+#bookmark-context-menu {
+    position: fixed; /* Именно fixed для Shadow DOM */
+    display: none;
+    background: #1e1e2e;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 5px 0;
+    min-width: 160px;
+    z-index: 100000; /* Максимальный приоритет */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    /* УБЕРИТЕ отсюда любые top, left, bottom, right */
+}
+
+.ctx-item {
+    padding: 8px 15px;
+    font-size: 12px;
+    color: #d4be98;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ctx-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.ctx-item.delete {
+    color: #f7768e;
+}
+
+.ctx-item.delete:hover {
+    background: rgba(247, 118, 142, 0.2);
 }
 
     `; // Обратная кавычка, точка с запятой
@@ -690,6 +827,7 @@ template() {
         <div id="taskbar"></div>
 
         <div id="close-preview-bar" class="global-btn" style="display: none;">ЗАКРЫТЬ ПРЕВЬЮ</div>
+        <div id="bookmarks-menu"></div>
       </div>
     `;
 }
@@ -699,149 +837,232 @@ connectedCallback() {
     setTimeout(() => this.setupPreview(), 10);
   }
 
-setupPreview() {
+
+// Вставляем прямо в class Tabs { ... }
+openNewWindow = (url) => {
+    const root = this.shadowRoot;
+    const fullContainer = root.getElementById('full-container');
+    const id = btoa(url).slice(-15, -3) + url.length;
+
+    if (this.openedWindows.find(w => w.id === id)) {
+        this.toggleWindow(id);
+        return;
+    }
+
+    const newFrame = document.createElement('webview');
+    newFrame.setAttribute('src', url);
+    newFrame.setAttribute('data-id', id);
+    newFrame.setAttribute('useragent', "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36");
+    newFrame.style.width = '100%';
+    newFrame.style.height = '100%';
+
+    // Обработка клавиш и мыши внутри webview
+    newFrame.addEventListener('dom-ready', () => {
+        newFrame.executeJavaScript(`
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.code === 'KeyD') {
+                    e.preventDefault();
+                    console.log('WEBVIEW_ACTION:SAVE_BOOKMARK');
+                }
+            });
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 3) console.log('WEBVIEW_ACTION:GO_BACK');
+                if (e.button === 4) console.log('WEBVIEW_ACTION:GO_FORWARD');
+            });
+        `);
+        newFrame.insertCSS(`::-webkit-scrollbar { width: 0px !important; display: none !important; }`);
+    });
+
+    newFrame.addEventListener('console-message', (e) => {
+        const msg = e.message;
+        if (msg === 'WEBVIEW_ACTION:SAVE_BOOKMARK') this.saveBookmark();
+        if (msg === 'WEBVIEW_ACTION:GO_BACK' && newFrame.canGoBack()) newFrame.goBack();
+        if (msg === 'WEBVIEW_ACTION:GO_FORWARD' && newFrame.canGoForward()) newFrame.goForward();
+    });
+
+    fullContainer.appendChild(newFrame);
+    this.openedWindows.push({ id, url });
+    this.toggleWindow(id);
+};
+
+toggleWindow = (id) => {
     const root = this.shadowRoot;
     const fullWin = root.getElementById('full-window');
     const fullContainer = root.getElementById('full-container');
+
+    if (this.activeWindowId === id) {
+        this.activeWindowId = null;
+        fullWin.style.display = 'none';
+    } else {
+        this.activeWindowId = id;
+        fullContainer.querySelectorAll('webview').forEach(f => f.style.display = 'none');
+        const activeFrame = fullContainer.querySelector(`webview[data-id="${id}"]`);
+        if (activeFrame) {
+            activeFrame.style.display = 'flex';
+            fullWin.style.display = 'flex';
+        }
+    }
+    this.updateTaskbar();
+};
+
+closeWindow = (id) => {
+    const root = this.shadowRoot;
+    const fullContainer = root.getElementById('full-container');
+    const wv = fullContainer.querySelector(`webview[data-id="${id}"]`);
+    if (wv) wv.remove();
+    this.openedWindows = this.openedWindows.filter(w => w.id !== id);
+    if (this.activeWindowId === id) {
+        this.activeWindowId = null;
+        root.getElementById('full-window').style.display = 'none';
+    }
+    this.updateTaskbar();
+};
+
+updateTaskbar = () => {
+    const root = this.shadowRoot;
+    const taskbar = root.getElementById('taskbar');
+    if (!taskbar) return;
+
+    taskbar.innerHTML = this.openedWindows.map(win => {
+        const domain = new URL(win.url).hostname;
+        return `
+            <div class="taskbar-item ${this.activeWindowId === win.id ? 'active' : ''}" data-id="${win.id}">
+                <img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}">
+                <div class="dot"></div>
+            </div>
+        `;
+    }).join('');
+
+    taskbar.querySelectorAll('.taskbar-item').forEach(el => {
+        el.onclick = () => this.toggleWindow(el.dataset.id);
+        el.oncontextmenu = (e) => {
+            e.preventDefault();
+            this.closeWindow(el.dataset.id);
+        };
+    });
+};
+
+setupPreview() {
+    const root = this.shadowRoot;
     const panel = root.getElementById('preview-panel');
     const frame = root.getElementById('preview-frame');
-    const taskbar = root.getElementById('taskbar');
     const btnPreview = root.getElementById('close-preview-bar');
+  
+    // Добавьте это в setupPreview или там, где настраиваете поиск
+const searchInput = root.querySelector('search-bar');
 
-    const desktopUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
+if (searchInput) {
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            // Получаем значение из input (учитывая Shadow DOM)
+            const inputVal = e.target.value || searchInput.shadowRoot.querySelector('input').value;
+            const trimInput = inputVal.trim();
 
-    const cleanStyles = (target) => {
-        target.addEventListener('dom-ready', () => {
-            target.insertCSS(`
-                ::-webkit-scrollbar { width: 0px !important; display: none !important; }
-                body { scrollbar-width: none !important; }
-                .JoinVkMsiteMobileHeader, .m_footer, [class*="UnauthActionPanel"] { display: none !important; }
-            `);
-        });
-    };
+            if (trimInput) {
+                let searchUrl = "";
+                let query = trimInput;
 
-    // ФУНКЦИЯ ЗАКРЫТИЯ (ВЫГРУЗКИ)
-    const closeWindow = (id) => {
-        const wv = fullContainer.querySelector(`webview[data-id="${id}"]`);
-        if (wv) wv.remove();
-        
-        this.openedWindows = this.openedWindows.filter(w => w.id !== id);
-        if (this.activeWindowId === id) {
-            this.activeWindowId = null;
-            fullWin.style.display = 'none';
-        }
-        updateTaskbar();
-    };
+                // Проверяем наличие тега (например, !y)
+                if (trimInput.startsWith('!')) {
+                    const parts = trimInput.split(' '); // Разделяем по пробелу
+                    const tag = parts[0].substring(1);  // Берем "y" из "!y"
 
-    // ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ (СВЕРНУТЬ/РАЗВЕРНУТЬ)
-    const toggleWindow = (id) => {
-        if (this.activeWindowId === id) {
-            this.activeWindowId = null;
-            fullWin.style.display = 'none';
-        } else {
-            this.activeWindowId = id;
-            const allFrames = fullContainer.querySelectorAll('webview');
-            allFrames.forEach(f => f.style.display = 'none');
+                    // Если такой тег есть в конфиге
+                    if (CONFIG.search.engines[tag]) {
+                        searchUrl = CONFIG.search.engines[tag][0];
+                        query = parts.slice(1).join(' '); // Берем всё, кроме тега
+                    } else {
+                        // Если тега нет в списке, ищем в Google (дефолт)
+                        searchUrl = CONFIG.search.engines.g[0];
+                    }
+                } else {
+                    // Если тега вообще нет — используем стандартный Google
+                    searchUrl = CONFIG.search.engines.g[0];
+                }
 
-            const activeFrame = fullContainer.querySelector(`webview[data-id="${id}"]`);
-            if (activeFrame) {
-                activeFrame.style.display = 'flex';
-                fullWin.style.display = 'flex';
+                // Открываем окно с финальной ссылкой
+                this.openNewWindow(searchUrl + encodeURIComponent(query));
+
+                // Очищаем поле (и в обычном DOM, и в Shadow если нужно)
+                if (e.target.value !== undefined) e.target.value = '';
+                const innerInput = searchInput.shadowRoot.querySelector('input');
+                if (innerInput) innerInput.value = '';
             }
         }
-        updateTaskbar();
-    };
-     
-      this.addEventListener('go-back', () => {
-    if (this.activeWindowId) {
-        const activeFrame = fullContainer.querySelector(`webview[data-id="${this.activeWindowId}"]`);
-        if (activeFrame && activeFrame.canGoBack()) {
-            activeFrame.goBack();
+    });
+}
+    // Инициализируем сервис закладок, передавая метод КЛАССА
+    this.bookmarkService = new BookmarkService(root, (url) => this.openNewWindow(url));
+    this.bookmarkService.render();
+  
+    root.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const path = e.composedPath();
+    
+    // 1. Проверяем, не закладка ли это
+    const bookmarkItem = path.find(el => el.classList && el.classList.contains('bookmark-item'));
+    if (bookmarkItem) {
+        const url = bookmarkItem.dataset.url;
+        if (this.bookmarkService && this.bookmarkService.showContextMenu) {
+            this.bookmarkService.showContextMenu(e, url);
         }
-    } else if (panel.style.display === 'flex') {
-        if (frame.canGoBack()) frame.goBack();
+        return; // Выходим, чтобы не сработал код ниже
+    }
+
+    // 2. Проверяем, не обычная ли это ссылка (для превью)
+    const link = path.find(el => el.tagName === 'A');
+    if (link && !path.some(el => el.id === 'taskbar')) {
+        frame.setAttribute('src', link.href);
+        panel.style.display = 'flex';
+        if (btnPreview) btnPreview.style.display = 'block';
     }
 });
 
-    const updateTaskbar = () => {
-        const taskbar = root.getElementById('taskbar');
-        if (!taskbar) return;
-
-        taskbar.innerHTML = this.openedWindows.map(win => {
-            let domain = "google.com";
-            try { domain = new URL(win.url).hostname; } catch(e) {}
-            
-            const isActive = this.activeWindowId === win.id;
-            
-            return `
-                <div class="taskbar-item ${isActive ? 'active' : ''}" data-id="${win.id}" title="${win.url}">
-                    <img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}">
-                    <div class="dot"></div>
-                </div>
-            `;
-        }).join('');
-
-        taskbar.querySelectorAll('.taskbar-item').forEach(el => {
-            el.onclick = () => toggleWindow(el.dataset.id);
-            el.oncontextmenu = (e) => {
-                e.preventDefault();
-                closeWindow(el.dataset.id);
-            };
-        });
-    };
-
-    // УНИВЕРСАЛЬНАЯ ФУНКЦИЯ СОЗДАНИЯ ОКНА
-    const openNewWindow = (url) => {
-        const id = btoa(url).slice(-15, -3) + url.length;
-
-        if (this.openedWindows.find(w => w.id === id)) {
-            toggleWindow(id);
-            return;
-        }
-
-        const newFrame = document.createElement('webview');
-        newFrame.setAttribute('src', url);
-        newFrame.setAttribute('data-id', id);
-        newFrame.setAttribute('useragent', desktopUA);
-        newFrame.style.width = '100%';
-        newFrame.style.height = '100%';
-
-        cleanStyles(newFrame);
-        fullContainer.appendChild(newFrame);
-        this.openedWindows.push({ id, url });
-        toggleWindow(id);
-    };
-
-    // СЛУШАЕМ СОБЫТИЕ ИЗ ПОИСК-БАРА
-    this.addEventListener('open-link', (e) => {
-        openNewWindow(e.detail.url);
-    });
-
-    // ЛКМ по ссылкам в категориях
-    root.addEventListener('click', (e) => {
-        const path = e.composedPath();
-        const link = path.find(el => el.tagName === 'A');
-        if (!link || e.button !== 0) return;
-        if (path.some(el => el.id === 'taskbar')) return;
-        
-        e.preventDefault();
-        openNewWindow(link.href);
-    });
-
-    // ПКМ по ссылкам (Превью)
-    root.addEventListener('contextmenu', (e) => {
-        const path = e.composedPath();
-        const link = path.find(el => el.tagName === 'A');
-        if (!link || path.some(el => el.id === 'taskbar')) return;
-        
-        e.preventDefault();
-        let url = link.href;
-
+    // ВОЗВРАЩАЕМ ПРЕВЬЮ ДЛЯ ЗАКЛАДОК
+    this.addEventListener('open-preview', (e) => {
+        const url = e.detail.url;
         frame.setAttribute('src', url);
-        cleanStyles(frame);
         panel.style.display = 'flex';
         if (btnPreview) btnPreview.style.display = 'block';
     });
+
+    // Слушатель Ctrl+D (KeyD работает в любой раскладке)
+    window.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.code === 'KeyD') {
+            e.preventDefault();
+            this.saveBookmark(); 
+        }
+    });
+    const { ipcRenderer } = require('electron');
+
+ipcRenderer.on('get-current-domain-for-proxy', () => {
+    // Ищем внутри Shadow Root текущего компонента
+    const activeWebview = this.shadowRoot.querySelector(`webview[data-id="${this.activeWindowId}"]`) 
+                       || this.shadowRoot.querySelector('webview');
+    
+    if (activeWebview) {
+        try {
+            const url = new URL(activeWebview.getURL());
+            const domain = url.hostname; // Получаем чистый домен (например, google.com)
+            
+            // 2. Отправляем его обратно в main.js
+            ipcRenderer.send('save-proxy-domain', domain);
+            alert(`Домен ${domain} добавлен в исключения прокси`);
+        } catch (e) {
+            console.error("Ошибка при получении домена:", e);
+        }
+    }
+});
+
+    // Клик по ссылкам (ЛКМ - новое окно, ПКМ - превью)
+    root.addEventListener('click', (e) => {
+        const link = e.composedPath().find(el => el.tagName === 'A');
+        if (link && e.button === 0 && !e.composedPath().some(el => el.id === 'taskbar')) {
+            e.preventDefault();
+            this.openNewWindow(link.href);
+        }
+    });
+
 
     if (btnPreview) {
         btnPreview.onclick = () => {
@@ -850,5 +1071,11 @@ setupPreview() {
             btnPreview.style.display = 'none';
         };
     }
-  }
+    
+    // Слушаем открытие статус-бара
+    this.addEventListener('toggle-bookmarks', () => {
+        this.bookmarkService.toggleMenu();
+        this.renderBookmarks();
+    });
+}
 }

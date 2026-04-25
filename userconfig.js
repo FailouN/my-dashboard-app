@@ -32,10 +32,10 @@ const default_config = {
   tabs: [
     {
       name: "chi ll",
-      background_url: "src/img/banners/cbg-2.gif",
-      links_background: "src/img/banners/right-bg-chill.jpg",
-      links_blur: 20,
-      links_opacity: 0.7,
+      background_url: "src/img/banners/leat-banner.jpg",
+      links_background: "src/img/banners/right-banner.jpg",
+      links_blur: 3,
+      links_opacity: 0.5,
       categories: [{
                     name: "Messenger",
                     links: [
@@ -45,12 +45,7 @@ const default_config = {
                             icon: "brand-telegram",
                             icon_color: "#229ED9",
                         },
-                        {
-                            name: "whatsapp",
-                            url: "https://web.whatsapp.com/",
-                            icon: "brand-whatsapp",
-                            icon_color: "#25D366",
-                        },
+                        
                         {
                             name: "discord",
                             url: "https://discord.com/app",
@@ -120,10 +115,10 @@ const default_config = {
     },
     {
       name: "design",
-      background_url: "src/img/banners/cbg-6.gif",
-      links_background: "src/img/banners/right-bg-chill.jpg",
-      links_blur: 20,
-      links_opacity: 0.7,
+      background_url: "src/img/banners/leat-banner.jpg",
+      links_background: "src/img/banners/right-banner.jpg",
+      links_blur: 3,
+      links_opacity: 0.5,
       categories: [
         {
           name: "inspiration",
@@ -157,18 +152,7 @@ const default_config = {
         {
           name: "resources",
           links: [
-            {
-              name: "figma",
-              url: "https://www.figma.com",
-              icon: "brand-figma",
-              icon_color: "#d3869b",
-            },
-            {
-              name: "uxpro",
-              url: "https://uxpro.cc/",
-              icon: "components",
-              icon_color: "#a9b665",
-            },
+            
             {
               name: "colorhunt",
               url: "https://colorhunt.co/",
@@ -204,10 +188,10 @@ const default_config = {
     },
     {
       name: "dev",
-      background_url: "src/img/banners/cbg-7.gif",
-      links_background: "src/img/banners/right-bg-chill.jpg",
-      links_blur: 20,
-      links_opacity: 0.7,
+      background_url: "src/img/banners/leat-banner.jpg",
+      links_background: "src/img/banners/right-banner.jpg",
+      links_blur: 3,
+      links_opacity: 0.5,
       categories: [
         {
           name: "repositories",
@@ -229,18 +213,6 @@ const default_config = {
         {
           name: "resources",
           links: [
-            {
-              name: "phind",
-              url: "https://www.phind.com/",
-              icon: "brand-openai",
-              icon_color: "#89b482",
-            },
-            {
-              name: "flutter",
-              url: "https://docs.flutter.dev/ui",
-              icon: "brand-flutter",
-              icon_color: "#7daea3",
-            },
             {
               name: "hacktricks",
               url: "https://book.hacktricks.xyz/welcome/readme",
@@ -288,10 +260,10 @@ const default_config = {
     },
     {
       name: "myself",
-      background_url: "src/img/banners/cbg-9.gif",
-      links_background: "src/img/banners/right-bg-chill.jpg",
-      links_blur: 20,
-      links_opacity: 0.7,
+      background_url: "src/img/banners/leat-banner.jpg",
+      links_background: "src/img/banners/right-banner.jpg",
+      links_blur: 3,
+      links_opacity: 0.5,
       categories: [
         {
                     name: "Mails",
@@ -349,12 +321,6 @@ const default_config = {
                             icon_color: "#FBBC05",
                         },
                         {
-                            name: "yandex fotos",
-                            url: "https://pogoda.yandex.ru/maps/static", // Либо прямая ссылка на ваш альбом
-                            icon: "camera",
-                            icon_color: "#FF0000",
-                        },
-                        {
                             name: "icloud",
                             url: "https://www.icloud.com/photos/",
                             icon: "brand-apple",
@@ -369,16 +335,23 @@ const default_config = {
 
 const CONFIG = new Config(saved_config ?? default_config);
 // const CONFIG = new Config(default_config);
+
 (function applyGlobalBackground() {
-    const bgImage = CONFIG.config.image || 'src/img/background.png'; // путь по умолчанию
+    const saved = localStorage.getItem("CONFIG");
+    const currentConfig = saved ? JSON.parse(saved) : CONFIG.config;
+    const bgImage = currentConfig.image || 'src/img/background-2.png';
+    
     const tabsList = document.querySelector('tabs-list');
     
     if (tabsList) {
-        tabsList.style.backgroundImage = `url(${bgImage})`;
+        // Добавлены кавычки для url("")
+        tabsList.style.backgroundImage = `url("${bgImage}")`;
+        tabsList.style.backgroundSize = 'cover';
+        tabsList.style.backgroundPosition = 'center';
     } else {
-        // Если компонент еще не создался, добавим стиль в body или дождемся загрузки
         const style = document.createElement('style');
-        style.innerHTML = `tabs-list { background-image: url(${bgImage}) !important; }`;
+        // Добавлены кавычки для url("")
+        style.innerHTML = `tabs-list { background-image: url("${bgImage}") !important; background-size: cover !important; }`;
         document.head.appendChild(style);
     }
 })();
