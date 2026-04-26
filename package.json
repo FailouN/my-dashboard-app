@@ -1,7 +1,11 @@
 {
   "name": "WebHub_Desktop",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "main": "main.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FailouN/WebHub_Desktop.git"
+  },
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder"
@@ -12,6 +16,13 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "FailouN",
+        "repo": "WebHub_Desktop"
+      }
+    ],
     "extraResources": [
       {
         "from": "user_data/",
@@ -40,6 +51,8 @@
     "@cliqz/adblocker-electron": "^1.34.0",
     "@ghostery/adblocker-electron": "^2.14.1",
     "cross-fetch": "^4.1.0",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "https-proxy-agent": "^9.0.0"
   }
 }

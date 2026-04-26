@@ -58,3 +58,104 @@ tabs-list {
     background-size: cover;
     background-position: center;
 }
+
+#app-header {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+
+    /* 1. Делаем фон полупрозрачным (0.8 — степень непрозрачности) */
+    background: rgba(40, 40, 40, 0.75); 
+
+    /* 2. Добавляем эффект матового стекла (размытие того, что под шапкой) */
+    /* Это создаст эффект глубины, как в Windows 11 или macOS */
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+
+    /* 3. Оставляем твою границу, чтобы край был четким */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    
+    box-sizing: border-box;
+    font-family: 'Yu Gothic', 'Segoe UI', serif;
+    color: #d4be98;
+}
+
+.header-drag-area {
+    -webkit-app-region: drag;
+    flex-grow: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-logo {
+    opacity: 0.5;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    pointer-events: none;
+}
+
+.header-controls {
+    display: flex;
+    height: 100%;
+}
+
+
+#close-btn:hover {
+    background: #ea6962 !important; /* Красный из темы Gruvbox */
+    color: #282828 !important;
+}
+
+/* Чтобы контент не залезал под шапку */
+body {
+    padding-top: 32px;
+}
+
+#app-menu-btn, .header-controls button {
+    -webkit-app-region: no-drag;
+    height: 100%;
+    background: transparent;
+    color: rgba(212, 190, 152, 0.6);
+    border: none;
+    cursor: pointer;
+    font-family: 'Yu Gothic', serif;
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.2s;
+    padding: 0 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+#app-menu-btn:hover, .header-controls button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #d4be98;
+}
+
+#app-menu-btn::after, .header-controls button:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    height: 16px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.fullscreen-mode #app-header {
+    display: none;
+}
+
+/* Убираем отступ, чтобы контент занял всё освободившееся место */
+body.fullscreen-mode {
+    padding-top: 0 !important;
+}

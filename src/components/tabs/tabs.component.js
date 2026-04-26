@@ -178,7 +178,7 @@ class Tabs extends Component {
     #full-window {
     display: none;
     position: fixed;
-    top: 0px;
+    top: 32px;
     left: 0px;
     right: 0px;
     

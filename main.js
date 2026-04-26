@@ -2,15 +2,45 @@ const { app, BrowserWindow, ipcMain, session, desktopCapturer, Menu, dialog } = 
 const path = require('path');
 const fs = require('fs');
 
+
 const { exec } = require('child_process');
 
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const fetch = require('cross-fetch');
 
+// 1. ПОДКЛЮЧЕНИЕ ОБНОВЛЕНИЙ И ЛОГОВ
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+
 
 // Реальный путь к данным в профиле пользователя (%APPDATA%)
 const userDataPath = path.join(app.getPath('appData'), 'WebHub-Desktop-profile');
+const gpuSettingsPath = path.join(userDataPath, 'gpu-settings.json');
 
+function isGpuEnabled() {
+    try {
+        if (fs.existsSync(gpuSettingsPath)) {
+            const data = JSON.parse(fs.readFileSync(gpuSettingsPath, 'utf8'));
+            return data.enabled !== false;
+        }
+    } catch (e) { console.error(e); }
+    return true; 
+}
+
+// ОБЯЗАТЕЛЬНО ОБЪЯВИ ЭТУ ПЕРЕМЕННУЮ ЗДЕСЬ:
+const gpuActive = isGpuEnabled(); 
+
+if (!gpuActive) {
+    app.disableHardwareAcceleration();
+    console.log("GPU Acceleration: DISABLED");
+} else {
+    app.commandLine.appendSwitch('ignore-gpu-blacklist');
+    app.commandLine.appendSwitch('enable-gpu-rasterization');
+    app.commandLine.appendSwitch('enable-zero-copy');
+    console.log("GPU Acceleration: ENABLED");
+}
 // Путь для папки-ссылки в директории программы
 const linkPath = path.join(process.cwd(), 'DATA_LINK'); 
 
@@ -202,6 +232,11 @@ function createApplicationMenu() {
                     click: () => { handleClearCookies(); }
                 },
 
+                {
+                 label: 'Проверить наличие обновлений',
+                   click: () => { autoUpdater.checkForUpdatesAndNotify(); }
+                 },
+
                 { type: 'separator' },
                 { role: 'reload', label: 'Перезагрузить страницу' },
                 { role: 'quit', label: 'Выход' }
@@ -246,8 +281,9 @@ function createApplicationMenu() {
                 }
             ]
         },
+        
         {
-            label: 'Вид',
+            label: 'Система',
             submenu: [
                 {
                     label: 'Режим отображения',
@@ -266,6 +302,26 @@ function createApplicationMenu() {
                         }
                     ]
                 },
+                {
+            label: 'Аппаратное ускорение',
+            type: 'checkbox',
+            checked: gpuActive,
+            click: () => {
+                const newState = !gpuActive;
+                fs.writeFileSync(gpuSettingsPath, JSON.stringify({ enabled: newState }));
+                dialog.showMessageBox({
+                    type: 'info',
+                    buttons: ['Перезагрузить', 'Позже'],
+                    title: 'Настройка GPU',
+                    message: `Для ${newState ? 'включения' : 'выключения'} ускорения нужна перезагрузка.`
+                }).then(({ response }) => {
+                    if (response === 0) {
+                        app.relaunch();
+                        app.exit();
+                    }
+                });
+            }
+        },
                 { role: 'toggleDevTools', label: 'Консоль разработчика' },
                 { type: 'separator' },
                 { role: 'resetZoom', label: 'Сбросить масштаб' },
@@ -279,6 +335,32 @@ function createApplicationMenu() {
     Menu.setApplicationMenu(menu);
 }
 
+// Настройка событий авто-апдейтера
+autoUpdater.on('update-available', () => {
+    dialog.showMessageBox({
+        type: 'info',
+        title: 'Обновление',
+        message: 'Найдена новая версия. Загружаю в фоне...',
+        buttons: ['Ок']
+    });
+});
+
+autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Установить и перезапустить', 'Позже'],
+        defaultId: 0,
+        title: 'Обновление готово',
+        message: 'Новая версия скачана. Перезагрузить программу для установки?'
+    }).then(result => {
+        if (result.response === 0) autoUpdater.quitAndInstall();
+    });
+});
+
+autoUpdater.on('error', (message) => {
+    console.error('Ошибка обновления:', message);
+});
+
 /**
  * ОСНОВНОЕ ОКНО ПРИЛОЖЕНИЯ
  */
@@ -286,6 +368,10 @@ async function createWindow() {
     const win = new BrowserWindow({
         width: 1600,
         height: 900,
+        frame: false, // ЭТО УБИРАЕТ СТАНДАРТНУЮ ШАПКУ
+        backgroundColor: '#00000000',
+        titleBarStyle: 'hidden', // Помогает сохранить кнопки управления, если нужно, но frame: false надежнее
+        resizable: true,    // чтобы можно было растягивать окно
         autoHideMenuBar: true, // Меню скрыто, появляется по нажатию Alt
         webPreferences: {
             autoplayPolicy: 'no-user-gesture-required',
@@ -295,16 +381,39 @@ async function createWindow() {
             webSecurity: false,
             allowRunningInsecureContent: true,
             nodeIntegration: true,
-            contextIsolation: false
+            contextIsolation: false,
+            offscreen: false, 
+            canvas: true,     
+            webgl: true
         }
     });
 
 win.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown' && input.key === 'F11') {
-        const isFullScreen = win.isFullScreen();
-        win.setFullScreen(!isFullScreen);
-        // Скрываем/показываем меню вместе с полноэкранным режимом
-        win.setMenuBarVisibility(isFullScreen); 
+    if (input.type === 'keyDown') {
+        // Логика для ALT (Показать/Скрыть меню)
+        if (input.code === 'AltLeft' || input.code === 'AltRight') {
+            // Предотвращаем стандартное поведение системы, чтобы взять управление на себя
+            event.preventDefault(); 
+            
+            const isMenuVisible = win.isMenuBarVisible();
+            win.setMenuBarVisibility(!isMenuVisible);
+            
+            // Если меню стало видимым, принудительно возвращаем фокус окну, 
+            // иначе оно может "зависнуть" в невидимой области меню
+            if (!isMenuVisible) {
+                win.focus();
+            }
+        }
+        
+        // Логика для F11 (Полный экран)
+        if (input.key === 'F11') {
+    const isFullScreen = win.isFullScreen();
+    win.setFullScreen(!isFullScreen);
+    win.setMenuBarVisibility(false);
+    
+    // Отправляем сигнал в UI
+    win.webContents.send('fullscreen-toggled', !isFullScreen);
+}
     }
 });
 
@@ -353,8 +462,7 @@ win.webContents.on('before-input-event', (event, input) => {
 
 setupBlocker(); // Запускаем в фоне
 
-    // Настройка User-Agent
-    // Находим место, где были старые строки, и пишем:
+
      setUserAgent('desktop');
 
      applyProxySettings().then(() => {
@@ -366,7 +474,8 @@ setupBlocker(); // Запускаем в фоне
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
         desktopCapturer.getSources({
             types: ['screen', 'window'],
-            thumbnailSize: { width: 150, height: 150 }
+            thumbnailSize: { width: 150, height: 150 },
+            fetchWindowIcons: true
         }).then((sources) => {
             const filteredSources = sources.filter(source => {
                 const name = source.name.toLowerCase();
@@ -474,3 +583,33 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 }); 
+
+ipcMain.on('window-minimize', () => {
+    BrowserWindow.getFocusedWindow().minimize();
+});
+
+ipcMain.on('window-maximize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win.isMaximized()) {
+        win.unmaximize();
+    } else {
+        win.maximize();
+    }
+  
+    setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 3000);
+});
+
+ipcMain.on('window-close', () => {
+    BrowserWindow.getFocusedWindow().close();
+});
+
+ipcMain.on('show-context-menu', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const menu = Menu.getApplicationMenu();
+    if (menu && win) {
+        // popup() без координат откроется прямо под курсором мыши
+        menu.popup({ window: win }); 
+    } else {
+        console.log("Меню не найдено или окно потеряно");
+    }
+});
