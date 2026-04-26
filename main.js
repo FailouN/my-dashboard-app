@@ -595,9 +595,9 @@ ipcMain.on('window-maximize', (event) => {
     } else {
         win.maximize();
     }
-  
-    setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 3000);
 });
+
+    setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 3000);
 
 ipcMain.on('window-close', () => {
     BrowserWindow.getFocusedWindow().close();
