@@ -1,11 +1,11 @@
-const { app, BrowserWindow, ipcMain, session, desktopCapturer, Menu, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, ipcMain, session, desktopCapturer, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { setupBlocker } = require('./adblocker');
 
 
 const { exec } = require('child_process');
 
-const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const fetch = require('cross-fetch');
 
 // 1. ПОДКЛЮЧЕНИЕ ОБНОВЛЕНИЙ И ЛОГОВ
@@ -374,6 +374,7 @@ async function createWindow() {
         resizable: true,    // чтобы можно было растягивать окно
         autoHideMenuBar: true, // Меню скрыто, появляется по нажатию Alt
         webPreferences: {
+            webrtcIPHandlingPolicy: 'disable_non_proxied_udp',
             autoplayPolicy: 'no-user-gesture-required',
             touchEvents: true,
             enableRemoteModule: true,
@@ -388,32 +389,26 @@ async function createWindow() {
         }
     });
 
+
+globalShortcut.register('F11', () => {
+    const isFullScreen = win.isFullScreen();
+    win.setFullScreen(!isFullScreen);
+    win.setMenuBarVisibility(false);
+    win.webContents.send('fullscreen-toggled', !isFullScreen);
+});
+
+// Оставляем Alt в before-input-event, так как он специфичен для окна
 win.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown') {
-        // Логика для ALT (Показать/Скрыть меню)
         if (input.code === 'AltLeft' || input.code === 'AltRight') {
-            // Предотвращаем стандартное поведение системы, чтобы взять управление на себя
             event.preventDefault(); 
-            
             const isMenuVisible = win.isMenuBarVisible();
             win.setMenuBarVisibility(!isMenuVisible);
             
-            // Если меню стало видимым, принудительно возвращаем фокус окну, 
-            // иначе оно может "зависнуть" в невидимой области меню
             if (!isMenuVisible) {
                 win.focus();
             }
         }
-        
-        // Логика для F11 (Полный экран)
-        if (input.key === 'F11') {
-    const isFullScreen = win.isFullScreen();
-    win.setFullScreen(!isFullScreen);
-    win.setMenuBarVisibility(false);
-    
-    // Отправляем сигнал в UI
-    win.webContents.send('fullscreen-toggled', !isFullScreen);
-}
     }
 });
 
@@ -427,47 +422,14 @@ win.webContents.on('before-input-event', (event, input) => {
     }
 
 
-
-// ПУТЬ К ФАЙЛУ КЕША БЛОКИРОВЩИКА
-    const blockerCachePath = path.join(userDataPath, 'adblocker.bin');
-
-// ЗАПУСК БЛОКИРОВЩИКА (Параллельно, без ожидания)
-    const setupBlocker = async () => {
-        try {
-            let blocker;
-            
-            // Проверяем, есть ли уже сохраненные фильтры на диске
-            if (fs.existsSync(blockerCachePath)) {
-                console.log('Downhload Ublock...');
-                const buffer = fs.readFileSync(blockerCachePath);
-                blocker = await ElectronBlocker.deserialize(buffer);
-            } else {
-                console.log('Cash not found');
-                blocker = await ElectronBlocker.fromLists(fetch, [
-                    'https://easylist.to/easylist/easylist.txt',
-                    'https://easylist.to/easylist/easyprivacy.txt',
-                    'https://ruadlist.github.io/ruadlist/ruadlist.txt',
-                    'https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt'
-                ]);
-                // Сохраняем на диск для следующего раза
-                fs.writeFileSync(blockerCachePath, blocker.serialize());
-            }
-
-            blocker.enableBlockingInSession(session.defaultSession);
-            console.log('Ublock Ready');
-        } catch (err) {
-            console.error('Не удалось запустить блокировщик:', err);
-        }
-    };
-
-setupBlocker(); // Запускаем в фоне
-
+setupBlocker(session.defaultSession);
 
      setUserAgent('desktop');
 
-     applyProxySettings().then(() => {
-        win.loadFile('index.html');
-    });
+  applyProxySettings().then(() => {
+     win.loadFile('index.html');
+ });
+
 
 
     // Обработчик выбора экрана (Screen Sharing)
@@ -583,6 +545,11 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 }); 
+
+// МЕСТО для очистки глобальных клавиш:
+app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+});
 
 ipcMain.on('window-minimize', () => {
     BrowserWindow.getFocusedWindow().minimize();

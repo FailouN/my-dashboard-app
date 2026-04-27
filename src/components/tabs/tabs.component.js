@@ -15,9 +15,9 @@ class Links extends Component {
     // Если иконки нет — берем фавиконку домена
     try {
         const domain = new URL(link.url).hostname;
-        return `<img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}" 
-                     class="link-icon" 
-                     style="width: 24px; height: 24px; object-fit: contain; margin-bottom: 2px;">`;
+        return `<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" 
+             class="link-icon" 
+             style="width: 24px; height: 24px; object-fit: contain; margin-bottom: 2px;">`;
     } catch (e) {
         // Если URL кривой, просто ставим заглушку
         return `<i class="ti ti-link link-icon"></i>`;
@@ -148,7 +148,8 @@ class Tabs extends Component {
         const domain = new URL(url).hostname;
         return `
             <div class="bookmark-item" data-url="${url}">
-                <img src="https://www.google.com/s2/favicons?sz=32&domain=${domain}">
+                
+<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${domain}</span>
             </div>
         `;
@@ -178,23 +179,25 @@ class Tabs extends Component {
     #full-window {
     display: none;
     position: fixed;
-    top: 32px;
+    
+    /* Используем переменную. Если она не задана, берем 32px */
+    top: var(--fw-top, 32px); 
+    
     left: 0px;
     right: 0px;
-    
-    /* 15px отступ + 38px высота бара + 15px отступ бара от края = 68px */
     bottom: 60px; 
     
     background: #1a1b26;
     border-radius: 0 0 15px 15px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    
-    /* Слой НИЖЕ статус-бара */
     z-index: 5000; 
     
     flex-direction: column;
     overflow: hidden;
+
+    /* Добавим плавный переход, чтобы окно не дергалось при нажатии F11 */
+    transition: top 0.2s ease-in-out;
 }
 
 #full-frame {
@@ -833,9 +836,30 @@ template() {
 }
 connectedCallback() {
     this.render();
-    // Даем браузеру миллисекунду, чтобы отрисовать HTML, прежде чем искать в нем панель
+    
+    // 1. Стандартная настройка превью
     setTimeout(() => this.setupPreview(), 10);
-  }
+
+    // 2. СЛУШАЕМ F11 (Fullscreen) из Main Process
+    const { ipcRenderer } = require('electron'); // Убедись, что доступ к ipcRenderer есть
+    
+    ipcRenderer.on('fullscreen-toggled', (event, isFullScreen) => {
+        const root = this.shadowRoot;
+        const fullWindow = root.getElementById('full-window');
+        
+        if (fullWindow) {
+            if (isFullScreen) {
+                // Прижимаем к верху, когда F11 активен
+                fullWindow.style.setProperty('--fw-top', '0px');
+                fullWindow.style.borderRadius = '0';
+            } else {
+                // Возвращаем стандартный отступ 32px
+                fullWindow.style.setProperty('--fw-top', '32px');
+                fullWindow.style.borderRadius = '0 0 15px 15px';
+            }
+        }
+    });
+}
 
 
 // Вставляем прямо в class Tabs { ... }
@@ -927,7 +951,7 @@ updateTaskbar = () => {
         const domain = new URL(win.url).hostname;
         return `
             <div class="taskbar-item ${this.activeWindowId === win.id ? 'active' : ''}" data-id="${win.id}">
-                <img src="https://www.google.com/s2/favicons?sz=64&domain=${domain}">
+                <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64">
                 <div class="dot"></div>
             </div>
         `;
