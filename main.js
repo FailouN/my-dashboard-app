@@ -152,16 +152,19 @@ function setUserAgent(type) {
 const proxyBypassPath = path.join(userDataPath, 'proxy_bypass.json');
 
 function applyProxySettings() {
-    let bypassList = "vk.com, m.vk.com, google.com, yandex.ru, mail.yandex.ru, kinopoisk.ru, www.kinopoisk.ru, disk.yandex.ru, 2ip.ru, ya.ru, mail.ru";
+    // Базовый список
+    const baseBypass = ["vk.com", "m.vk.com", "google.com", "yandex.ru", "mail.yandex.ru", "kinopoisk.ru", "www.kinopoisk.ru", "disk.yandex.ru", "2ip.ru", "ya.ru", "mail.ru"];
     
+    let savedDomains = [];
     if (fs.existsSync(proxyBypassPath)) {
         try {
-            const saved = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
-            if (Array.isArray(saved) && saved.length > 0) {
-                bypassList += ", " + saved.join(", ");
-            }
+            savedDomains = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
         } catch (e) { console.error("Proxy file error:", e); }
     }
+
+    // Объединяем и убираем дубликаты
+    const uniqueBypass = [...new Set([...baseBypass, ...savedDomains])];
+    const bypassList = uniqueBypass.join(", ");
 
     const proxyConfig = {
         proxyRules: "http://77.239.104.196:8888",
@@ -169,12 +172,12 @@ function applyProxySettings() {
     };
 
     return session.defaultSession.setProxy(proxyConfig)
-        .then(() => console.log('Proxy applied. Bypass:', bypassList))
+        .then(() => console.log('Proxy applied. Unique Bypass:', bypassList))
         .catch(err => console.error('Proxy setup error:', err));
 }
 
 // 2. ОБРАБОТЧИКИ IPC (Тоже глобально)
-ipcMain.on('save-proxy-domain', (event, domain) => {
+ipcMain.handle('save-proxy-domain', (event, domain) => {
     let list = [];
     if (fs.existsSync(proxyBypassPath)) {
         try { list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8')); } catch(e){}
@@ -187,16 +190,8 @@ ipcMain.on('save-proxy-domain', (event, domain) => {
     }
 });
 
-ipcMain.on('delete-proxy-domain', (event, domain) => {
-    if (fs.existsSync(proxyBypassPath)) {
-        try {
-            let list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
-            list = list.filter(d => d !== domain);
-            fs.writeFileSync(proxyBypassPath, JSON.stringify(list));
-            applyProxySettings();
-            createApplicationMenu();
-        } catch (e) { console.error(e); }
-    }
+ipcMain.handle('delete-proxy-domain', (event, domain) => {
+    removeProxyDomain(domain); // Используем общую функцию
 });
 
 function getSavedProxyDomains() {
@@ -262,7 +257,7 @@ function createApplicationMenu() {
                             click: () => {
                                 // Вызываем удаление конкретного домена
                                 // Мы имитируем вызов IPC события
-                                ipcMain.emit('delete-proxy-domain', {}, domain);
+                                removeProxyDomain(domain);
                             }
                         };
                     })
@@ -377,12 +372,13 @@ async function createWindow() {
             webrtcIPHandlingPolicy: 'disable_non_proxied_udp',
             autoplayPolicy: 'no-user-gesture-required',
             touchEvents: true,
-            enableRemoteModule: true,
             webviewTag: true,
             webSecurity: false,
             allowRunningInsecureContent: true,
-            nodeIntegration: true,
-            contextIsolation: false,
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+            preload: path.join(__dirname, 'preload.js'),
             offscreen: false, 
             canvas: true,     
             webgl: true
@@ -390,12 +386,7 @@ async function createWindow() {
     });
 
 
-globalShortcut.register('F11', () => {
-    const isFullScreen = win.isFullScreen();
-    win.setFullScreen(!isFullScreen);
-    win.setMenuBarVisibility(false);
-    win.webContents.send('fullscreen-toggled', !isFullScreen);
-});
+
 
 // Оставляем Alt в before-input-event, так как он специфичен для окна
 win.webContents.on('before-input-event', (event, input) => {
@@ -538,9 +529,31 @@ ipcMain.handle('select-file', async () => {
 });
 // Запуск приложения
 app.whenReady().then(() => {
-    createApplicationMenu(); // Инициализируем меню
+    // Применяем прокси до открытия окон
+    applyProxySettings();
+    
+    // Создаем меню
+    createApplicationMenu();
+    
+    // Создаем главное окно
     createWindow();
+ 
+    globalShortcut.register('F11', () => {
+    const focusedWin = BrowserWindow.getFocusedWindow();
+    if (focusedWin) {
+        const state = !focusedWin.isFullScreen();
+        focusedWin.setFullScreen(state);
+        focusedWin.setMenuBarVisibility(false);
+        focusedWin.webContents.send('fullscreen-toggled', state);
+    }
 });
+    
+    // Проверка обновлений через 3 сек
+    setTimeout(() => { 
+        autoUpdater.checkForUpdatesAndNotify(); 
+    }, 3000);
+});
+
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
@@ -551,11 +564,11 @@ app.on('will-quit', () => {
     globalShortcut.unregisterAll();
 });
 
-ipcMain.on('window-minimize', () => {
+ipcMain.handle('window-minimize', () => {
     BrowserWindow.getFocusedWindow().minimize();
 });
 
-ipcMain.on('window-maximize', (event) => {
+ipcMain.handle('window-maximize', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (win.isMaximized()) {
         win.unmaximize();
@@ -566,17 +579,33 @@ ipcMain.on('window-maximize', (event) => {
 
     setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 3000);
 
-ipcMain.on('window-close', () => {
+ipcMain.handle('window-close', () => {
     BrowserWindow.getFocusedWindow().close();
 });
 
-ipcMain.on('show-context-menu', (event) => {
+ipcMain.handle('show-context-menu', (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const menu = Menu.getApplicationMenu();
     if (menu && win) {
-        // popup() без координат откроется прямо под курсором мыши
-        menu.popup({ window: win }); 
-    } else {
-        console.log("Меню не найдено или окно потеряно");
+        menu.popup({ window: win });
     }
 });
+
+ipcMain.handle('get-proxy-bypass-list', () => {
+    return getSavedProxyDomains();
+});
+
+function removeProxyDomain(domain) {
+    if (fs.existsSync(proxyBypassPath)) {
+        try {
+            let list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
+            list = list.filter(d => d !== domain);
+            fs.writeFileSync(proxyBypassPath, JSON.stringify(list));
+            applyProxySettings(); // Применяем новые настройки прокси[cite: 4]
+            createApplicationMenu(); // Обновляем само меню[cite: 4]
+        } catch (e) { 
+            console.error("Ошибка при удалении домена:", e); 
+        }
+    }
+}
+

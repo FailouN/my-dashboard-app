@@ -328,6 +328,10 @@ saveConfig() {
 
     // 5. Финальное сохранение
     localStorage.setItem("CONFIG", JSON.stringify(newConfig));
+ 
+    if (window.electronAPI) {
+    window.electronAPI.send('config-save', JSON.stringify(newConfig));
+}
     
     // Даем небольшую задержку перед перезагрузкой, чтобы localStorage успел записаться (для надежности)
     setTimeout(() => {
@@ -335,28 +339,27 @@ saveConfig() {
     }, 100);
 }
   setEvents() {
+    // 1. Стандартные события (закрытие, выход)
     this.refs.config.onkeyup = (e) => { if (e.key === 'Escape') this.deactivate(); };
     this.shadowRoot.querySelector('.close').onclick = () => this.deactivate();
     this.shadowRoot.querySelector('.save-all').onclick = () => this.saveConfig();
 
+    // 2. Сброс конфигурации
     this.shadowRoot.getElementById('reset-config').onclick = () => {
         if (confirm('Сбросить все настройки к исходным?')) {
             localStorage.removeItem("CONFIG");
             location.reload();
         }
     };
-    // Используем window.require для надежности в Electron
-    const electron = window.require ? window.require('electron') : null;
-    if (!electron) return;
-    const { ipcRenderer } = electron;
 
+    // 3. Обработка кнопок выбора файлов (ОБЗОР)
     this.shadowRoot.querySelectorAll('.btn-browse').forEach(btn => {
         btn.onclick = async () => {
             const targetId = btn.dataset.target;
             const tabIdx = btn.dataset.tab;
             
             let input;
-            // Улучшенный поиск инпута
+            // Поиск инпута в зависимости от того, глобальный он или принадлежит вкладке
             if (tabIdx !== undefined) {
                 input = this.shadowRoot.querySelector(`.${targetId}[data-tab="${tabIdx}"]`);
             } else {
@@ -368,18 +371,27 @@ saveConfig() {
                 return;
             }
 
-            // Вызываем диалог
-            const newPath = await ipcRenderer.invoke('select-file');
-            
-            if (newPath) {
-                input.value = newPath;
-                input.style.borderColor = '#a9b665';
-                // Важно: генерируем событие input, чтобы сработали другие обработчики, если они есть
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+            // ИСПОЛЬЗУЕМ ВАШ МОСТ ИЗ PRELOAD.JS
+            // Вместо ipcRenderer.invoke используем window.electronAPI.invoke
+            if (window.electronAPI && window.electronAPI.invoke) {
+                try {
+                    const newPath = await window.electronAPI.invoke('select-file');
+                    
+                    if (newPath) {
+                        input.value = newPath;
+                        input.style.borderColor = '#a9b665';
+                        // Генерируем событие, чтобы форма "заметила" изменения
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                } catch (err) {
+                    console.error("Ошибка при выборе файла:", err);
+                }
+            } else {
+                console.warn("Electron API недоступен. Проверьте preload.js");
             }
         };
     });
-  }
+}
 
   setConfig() {
     this.refs.textarea.value =  JSON.stringify(this.config, null, 4);

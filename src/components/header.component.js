@@ -1,11 +1,10 @@
 // src/components/header.component.js
-const { ipcRenderer } = require('electron'); 
 
 function createHeader() {
     const header = document.createElement('header');
     header.id = 'app-header';
     header.innerHTML = `
-   <button id="app-menu-btn" style="margin-right: 10px; cursor: pointer;">☰ Меню</button>
+        <button id="app-menu-btn" style="margin-right: 10px; cursor: pointer;">☰ Меню</button>
         <div class="header-drag-area">
             <div class="header-logo">
                 <img src="src/img/logo.ico" width="16" height="16" style="margin-right: 8px;">
@@ -21,24 +20,28 @@ function createHeader() {
 
     document.body.prepend(header);
 
-    // Вызов системного меню
-    document.getElementById('app-menu-btn').onclick = (e) => {
-        ipcRenderer.send('show-context-menu');
-    };
+    // Проверяем наличие API перед использованием
+    if (window.electronAPI) {
+        document.getElementById('app-menu-btn').onclick = () => {
+            window.electronAPI.invoke('show-context-menu');
+        };
 
-    // Управление окном
-    document.getElementById('min-btn').onclick = () => ipcRenderer.send('window-minimize');
-    document.getElementById('max-btn').onclick = () => ipcRenderer.send('window-maximize');
-    document.getElementById('close-btn').onclick = () => ipcRenderer.send('window-close');
+        document.getElementById('min-btn').onclick = () => window.electronAPI.invoke('window-minimize');
+        document.getElementById('max-btn').onclick = () => window.electronAPI.invoke('window-maximize');
+        document.getElementById('close-btn').onclick = () => window.electronAPI.invoke('window-close');
+    }
 }
 
-// Внутри или после функции createHeader в header.component.js
-ipcRenderer.on('fullscreen-toggled', (event, isFullScreen) => {
-    if (isFullScreen) {
-        document.body.classList.add('fullscreen-mode');
-    } else {
-        document.body.classList.remove('fullscreen-mode');
-    }
-});
+// Слушатель событий: убираем 'event', так как в preload.js он уже отфильтрован
+if (window.electronAPI && window.electronAPI.on) {
+    window.electronAPI.on('fullscreen-toggled', (isFullScreen) => { // Исправлено: только один аргумент
+        if (isFullScreen) {
+            document.body.classList.add('fullscreen-mode');
+        } else {
+            document.body.classList.remove('fullscreen-mode');
+        }
+    });
+}
 
-module.exports = createHeader;
+// Делаем функцию глобальной для вызова из index.html
+window.createHeader = createHeader;

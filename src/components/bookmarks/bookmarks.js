@@ -22,7 +22,22 @@ class BookmarkService {
         }
     }
 
-    // Основной метод показа меню
+    // Метод для добавления новой закладки с заголовком
+    addBookmark(url, title) {
+        let bookmarks = this.getBookmarks();
+        
+        // Проверяем, нет ли уже такой ссылки
+        if (!bookmarks.find(b => b.url === url)) {
+            bookmarks.push({
+                url: url,
+                title: title || new URL(url).hostname // Если заголовка нет, берем домен
+            });
+            localStorage.setItem(this.storageKey, JSON.stringify(bookmarks));
+            this.render();
+        }
+    }
+
+    // Показ контекстного меню
     showContextMenu(e, url) {
         this.selectedUrl = url;
         let menu = this.root.getElementById('bookmark-context-menu');
@@ -30,7 +45,10 @@ class BookmarkService {
         if (!menu) {
             menu = document.createElement('div');
             menu.id = 'bookmark-context-menu';
-            this.root.getElementById('links').appendChild(menu);
+            // Убедитесь, что элемент с id 'links' существует в вашем shadowRoot
+            const linksContainer = this.root.getElementById('links');
+            if (linksContainer) linksContainer.appendChild(menu);
+            else this.root.appendChild(menu); 
         }
 
         menu.innerHTML = `
@@ -43,12 +61,11 @@ class BookmarkService {
         menu.style.display = 'block';
         menu.style.position = 'fixed';
         
-        // Считаем координаты (левый нижний угол у курсора)
-        const menuHeight = menu.offsetHeight || 120; // 120 как запасной вариант
+        // Рассчитываем позицию
+        const menuHeight = menu.offsetHeight || 120;
         menu.style.left = `${e.clientX}px`;
         menu.style.top = `${e.clientY - menuHeight}px`;
 
-        // Вешаем события на кнопки ПРЯМО ЗДЕСЬ
         menu.querySelectorAll('.ctx-item').forEach(item => {
             item.onclick = (ev) => {
                 ev.stopPropagation();
@@ -81,13 +98,30 @@ class BookmarkService {
     }
 
     deleteBookmark(url) {
-        let bookmarks = this.getBookmarks().filter(b => b !== url);
+        // Фильтруем по свойству url в объекте
+        let bookmarks = this.getBookmarks().filter(b => b.url !== url);
         localStorage.setItem(this.storageKey, JSON.stringify(bookmarks));
         this.render();
     }
 
     getBookmarks() {
-        return JSON.parse(localStorage.getItem(this.storageKey) || '[]');
+        const rawData = localStorage.getItem(this.storageKey);
+        if (!rawData) return [];
+        
+        try {
+            let data = JSON.parse(rawData);
+            // ПРОВЕРКА И КОНВЕРТАЦИЯ: если в памяти старый формат (просто строки),
+            // превращаем их в объекты на лету, чтобы код не упал.
+            return data.map(item => {
+                if (typeof item === 'string') {
+                    return { url: item, title: new URL(item).hostname };
+                }
+                return item;
+            });
+        } catch (e) {
+            console.error("Ошибка чтения закладок", e);
+            return [];
+        }
     }
 
     render() {
@@ -95,13 +129,14 @@ class BookmarkService {
         if (!menu) return;
 
         const bookmarks = this.getBookmarks();
-        menu.innerHTML = bookmarks.map(url => {
+        menu.innerHTML = bookmarks.map(bookmark => {
             let domain = "link";
-            try { domain = new URL(url).hostname; } catch(e) {}
+            try { domain = new URL(bookmark.url).hostname; } catch(e) {}
+            
             return `
-                <div class="bookmark-item" data-url="${url}">
+                <div class="bookmark-item" data-url="${bookmark.url}">
                     <img src="https://www.google.com/s2/favicons?sz=32&domain=${domain}">
-                    <span>${domain}</span>
+                    <span title="${bookmark.url}">${bookmark.title}</span>
                 </div>
             `;
         }).join('');
@@ -115,7 +150,6 @@ class BookmarkService {
             el.oncontextmenu = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Вызываем наш обновленный метод
                 this.showContextMenu(e, el.dataset.url);
             };
         });

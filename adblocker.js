@@ -1,52 +1,52 @@
 const { ElectronBlocker } = require('@ghostery/adblocker-electron');
 const fetch = require('cross-fetch');
-const fs = require('fs');
+const fs = require('fs').promises; // Используем асинхронные версии
+const { existsSync } = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
 async function setupBlocker(sessionInstance) {
-    // Путь к папке профиля и самому файлу кеша
-    const userDataPath = path.join(app.getPath('appData'), 'WebHub-Desktop-profile');
+    // Используем стандартную папку данных приложения
+    const userDataPath = app.getPath('userData');
     const blockerCachePath = path.join(userDataPath, 'adblocker.bin');
     
-    // Твоя прямая ссылка на GitHub на уже готовый (сериализованный) файл
     const githubUrl = 'https://github.com/FailouN/WebHub_Desktop/releases/download/1.0.0/adblocker.bin';
 
-    if (!fs.existsSync(userDataPath)) {
-        fs.mkdirSync(userDataPath, { recursive: true });
-    }
-
     try {
-        console.log('AdBlock: Попытка обновить файл с GitHub...');
-        
+        // Проверяем наличие папки асинхронно
+        if (!existsSync(userDataPath)) {
+            await fs.mkdir(userDataPath, { recursive: true });
+        }
+
+        // Логика обновления (можно добавить условие "раз в сутки")
         try {
-            // Скачиваем файл как обычный ресурс
+            console.log('AdBlock: Проверка обновлений...');
             const response = await fetch(githubUrl);
+            
             if (response.ok) {
                 const buffer = await response.arrayBuffer();
-                fs.writeFileSync(blockerCachePath, Buffer.from(buffer));
-                console.log('AdBlock: Файл успешно скачан и обновлен.');
-            } else {
-                console.log('AdBlock: GitHub вернул ошибку, попробую использовать локальный файл.');
+                await fs.writeFile(blockerCachePath, Buffer.from(buffer));
+                console.log('AdBlock: Списки обновлены.');
             }
         } catch (downloadErr) {
-            console.error('AdBlock: Не удалось достучаться до GitHub (возможно, прокси).');
+            console.warn('AdBlock: Не удалось обновить списки, работаем на старом кэше.');
         }
 
         let blocker;
 
-        if (fs.existsSync(blockerCachePath)) {
-            console.log('AdBlock: Инициализация из локального файла...');
-            const buffer = fs.readFileSync(blockerCachePath);
-            blocker = await ElectronBlocker.deserialize(buffer);
+        if (existsSync(blockerCachePath)) {
+            const buffer = await fs.readFile(blockerCachePath);
+            blocker = await ElectronBlocker.deserialize(new Uint8Array(buffer));
+            console.log('AdBlock: Десериализация успешна.');
         } else {
-            console.log('AdBlock: Файл не найден ни в сети, ни локально. Запуск без фильтров.');
-            // Создаем пустой блокировщик, чтобы программа не упала
-            blocker = await ElectronBlocker.fromLists(fetch, []);
+            // Если файла нет совсем, загружаем базовые списки из сети (fallback)
+            blocker = await ElectronBlocker.fromLists(fetch, [
+                'https://secure.fanboy.co.nz/easylist.txt'
+            ]);
         }
 
         blocker.enableBlockingInSession(sessionInstance);
-        console.log('AdBlock: Готов');
+        console.log('AdBlock: Активен');
 
     } catch (err) {
         console.error('AdBlock Critical Error:', err);

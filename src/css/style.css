@@ -70,11 +70,11 @@ tabs-list {
     z-index: 10000;
 
     /* 1. Делаем фон полупрозрачным (0.8 — степень непрозрачности) */
-    background: rgba(40, 40, 40, 0.75); 
+    background: rgba(40, 40, 40, 0.7); 
 
     /* 2. Добавляем эффект матового стекла (размытие того, что под шапкой) */
     /* Это создаст эффект глубины, как в Windows 11 или macOS */
-    backdrop-filter: blur(12px) saturate(150%);
+    backdrop-filter: blur(3px) saturate(80%);
     -webkit-backdrop-filter: blur(12px) saturate(150%);
 
     /* 3. Оставляем твою границу, чтобы край был четким */

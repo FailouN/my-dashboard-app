@@ -1,61 +1,58 @@
 class Links extends Component {
-  constructor() {
-    super();
-  }
-
-  static getIcon(link) {
-    const defaultColor = "#726f6f";
-
-    // Если иконка задана в конфиге — рисуем системную иконку
-    if (link.icon && link.icon.trim() !== "") {
-        return `<i class="ti ti-${link.icon} link-icon"
-                style="color: ${link.icon_color ?? defaultColor}"></i>`;
-    } 
-    
-    // Если иконки нет — берем фавиконку домена
-    try {
-        const domain = new URL(link.url).hostname;
-        return `<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" 
-             class="link-icon" 
-             style="width: 24px; height: 24px; object-fit: contain; margin-bottom: 2px;">`;
-    } catch (e) {
-        // Если URL кривой, просто ставим заглушку
-        return `<i class="ti ti-link link-icon"></i>`;
+    constructor() {
+        super();
+        this.tabs = CONFIG.tabs;
+        this.openedWindows = [];
+        this.activeWindowId = null;
     }
-  }
 
-  static getAll(tabName, tabs) {
-    if (!tabs) return ""; // Защита от пустого конфига
-    const tab = tabs.find((f) => f.name === tabName);
-    if (!tab) return ""; // Если вкладка не найдена — не падаем
-    
-    const { categories } = tab;
-   
+    static getIcon(link) {
+        const defaultColor = "#726f6f";
 
-    return `
-      ${
-      categories.map(({ name, links }) => {
-        return `
-          <li>
-            <h1>${name}</h1>
-              <div class="links-wrapper">
-              ${
-          links.map((link) => `
-                  <div class="link-info">
-                    <a href="${link.url}">
-                      ${Links.getIcon(link)}
-                      ${
-            link.name ? `<p class="link-name">${link.name}</p>` : ""
-          }
-                    </a>
-                </div>`).join("")
+        // Если иконка задана в конфиге — рисуем системную иконку
+        if (link.icon && link.icon.trim() !== "") {
+            return `<i class="ti ti-${link.icon} link-icon" style="color: ${link.icon_color ?? defaultColor}"></i>`;
         }
-            </div>
-          </li>`;
-      }).join("")
+        
+        // Если иконки нет — берем фавиконку домена
+        try {
+            const domain = new URL(link.url).hostname;
+            return `<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=64" 
+                        class="link-icon" 
+                        style="width: 24px; height: 24px; object-fit: contain; margin-bottom: 2px;">`;
+        } catch (e) {
+            // Если URL кривой, просто ставим заглушку
+            return `<i class="ti ti-link link-icon"></i>`;
+        }
     }
-    `;
-  }
+
+    static getAll(tabName, tabs) {
+        if (!tabs) return "";
+        const tab = tabs.find((t) => t.name === tabName);
+        if (!tab) return "";
+        
+        const { categories } = tab;
+
+        return `
+            ${categories.map(({ name, links }) => {
+                return `
+                    <li>
+                        <h1>${name}</h1>
+                        <div class="links-wrapper">
+                            ${links.map((link) => `
+                                <div class="link-info">
+                                    <a href="${link.url}">
+                                        ${Links.getIcon(link)}
+                                        ${link.name ? `<p class="link-name">${link.name}</p>` : ""}
+                                    </a>
+                                </div>
+                            `).join("")}
+                        </div>
+                    </li>
+                `;
+            }).join("")}
+        `;
+    }
 }
 
 class Category extends Component {
@@ -119,49 +116,76 @@ class Tabs extends Component {
     const frame = root.getElementById('preview-frame');
 
     let currentUrl = "";
+    let currentTitle = "";
+
+    // Определяем активное окно и достаем из него URL и Title
     if (this.activeWindowId) {
         const activeFrame = fullContainer.querySelector(`webview[data-id="${this.activeWindowId}"]`);
-        if (activeFrame) currentUrl = activeFrame.getURL();
+        if (activeFrame) {
+            currentUrl = activeFrame.getURL();
+            currentTitle = activeFrame.getTitle(); // Получаем заголовок страницы
+        }
     } else if (panel && panel.style.display === 'flex') {
         currentUrl = frame.getURL();
+        currentTitle = frame.getTitle();
     }
 
     if (currentUrl && currentUrl !== "about:blank") {
         let bookmarks = JSON.parse(localStorage.getItem('user-bookmarks') || '[]');
-        if (!bookmarks.includes(currentUrl)) {
-            bookmarks.push(currentUrl);
+        
+        // Проверяем, нет ли уже такой ссылки (сравниваем по URL)
+        const exists = bookmarks.some(b => (typeof b === 'string' ? b : b.url) === currentUrl);
+
+        if (!exists) {
+            // Сохраняем как объект
+            bookmarks.push({
+                url: currentUrl,
+                title: currentTitle || currentUrl // Если титул пустой, пишем URL
+            });
             localStorage.setItem('user-bookmarks', JSON.stringify(bookmarks));
-            // Вместо alert можно вывести уведомление в лог
-            console.log("Закладка сохранена:", currentUrl);
+            console.log("Закладка сохранена:", currentTitle);
             this.renderBookmarks(); 
         }
     }
-  };
+};
 
   // 2. Метод отрисовки тоже выносим в класс
   renderBookmarks = () => {
     const bookmarksMenu = this.shadowRoot.getElementById('bookmarks-menu');
     if (!bookmarksMenu) return;
 
-    const bookmarks = JSON.parse(localStorage.getItem('user-bookmarks') || '[]');
-    bookmarksMenu.innerHTML = bookmarks.map(url => {
-        const domain = new URL(url).hostname;
+    const rawBookmarks = JSON.parse(localStorage.getItem('user-bookmarks') || '[]');
+
+    bookmarksMenu.innerHTML = rawBookmarks.map(item => {
+        // Поддержка и старых строк, и новых объектов
+        const url = typeof item === 'string' ? item : item.url;
+        const title = typeof item === 'object' ? item.title : null;
+        
+        let domain = "link";
+        try {
+            domain = new URL(url).hostname;
+        } catch (e) { return ""; }
+
+        // Если есть title, используем его, иначе домен
+        const displayName = title || domain;
+
         return `
             <div class="bookmark-item" data-url="${url}">
-                
-<img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32">
-                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${domain}</span>
+                <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32">
+                <span title="${displayName}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    ${displayName}
+                </span>
             </div>
         `;
     }).join('');
 
     bookmarksMenu.querySelectorAll('.bookmark-item').forEach(el => {
         el.onclick = () => {
-            this.openNewWindow(el.dataset.url); // Убедись, что openNewWindow тоже метод класса
+            this.openNewWindow(el.dataset.url);
             bookmarksMenu.style.display = 'none';
         };
     });
-  };
+};
 
   
   style() {
@@ -179,10 +203,7 @@ class Tabs extends Component {
     #full-window {
     display: none;
     position: fixed;
-    
-    /* Используем переменную. Если она не задана, берем 32px */
-    top: var(--fw-top, 32px); 
-    
+    top: 0px;
     left: 0px;
     right: 0px;
     bottom: 60px; 
@@ -195,9 +216,6 @@ class Tabs extends Component {
     
     flex-direction: column;
     overflow: hidden;
-
-    /* Добавим плавный переход, чтобы окно не дергалось при нажатии F11 */
-    transition: top 0.2s ease-in-out;
 }
 
 #full-frame {
@@ -804,7 +822,6 @@ webview::-webkit-scrollbar {
   } // Закрывающая скобка метода style
 
 template() {
-
     return `
       <div id="links">
         <div id="panels">
@@ -830,35 +847,56 @@ template() {
         <div id="taskbar"></div>
 
         <div id="close-preview-bar" class="global-btn" style="display: none;">ЗАКРЫТЬ ПРЕВЬЮ</div>
-        <div id="bookmarks-menu"></div>
+        
+        <!-- КОНТЕЙНЕРЫ ДЛЯ МЕНЮ -->
+        <div id="bookmarks-menu" style="display: none;"></div>
+        <div id="bookmark-context-menu" style="display: none;"></div>
       </div>
     `;
 }
+
 connectedCallback() {
     this.render();
     
-    // 1. Стандартная настройка превью
-    setTimeout(() => this.setupPreview(), 10);
+    if (window.electronAPI) {
 
-    // 2. СЛУШАЕМ F11 (Fullscreen) из Main Process
-    const { ipcRenderer } = require('electron'); // Убедись, что доступ к ipcRenderer есть
+        window.electronAPI.on('assistant-command-voice', (command) => {
+    console.log("Выполняю команду из системы:", command);
     
-    ipcRenderer.on('fullscreen-toggled', (event, isFullScreen) => {
-        const root = this.shadowRoot;
-        const fullWindow = root.getElementById('full-window');
-        
-        if (fullWindow) {
-            if (isFullScreen) {
-                // Прижимаем к верху, когда F11 активен
-                fullWindow.style.setProperty('--fw-top', '0px');
-                fullWindow.style.borderRadius = '0';
-            } else {
-                // Возвращаем стандартный отступ 32px
-                fullWindow.style.setProperty('--fw-top', '32px');
-                fullWindow.style.borderRadius = '0 0 15px 15px';
-            }
+    if (command === "пауза" || command === "стоп") {
+        document.querySelector('webview')?.executeJavaScript(`document.querySelectorAll('video, audio').forEach(m => m.pause())`);
+    }
+    if (command === "сверни") {
+        window.electronAPI.send('window-minimize');
+    }
+});
+
+        // 2. Слушаем прокси (ОСТАВЛЯЕМ ТОЛЬКО ЭТОТ ВЫЗОВ)[cite: 4]
+        window.electronAPI.on('get-current-domain-for-proxy', () => {
+            this.handleProxyRequest(); // Вся логика теперь будет жить в этом методе ниже
+        });
+    }
+
+    setTimeout(() => this.setupPreview(), 10);
+}
+
+closeBookmarksIfClickedOutside = (e) => {
+    const bookmarksMenu = this.shadowRoot.getElementById('bookmarks-menu');
+    const bookmarksBtn = this.shadowRoot.getElementById('bookmarks-btn');
+    
+    if (bookmarksMenu && bookmarksMenu.style.display === 'flex') {
+        const path = e.composedPath();
+        const isClickInsideMenu = path.includes(bookmarksMenu);
+        const isClickInsideBtn = path.includes(bookmarksBtn);
+
+        if (!isClickInsideMenu && !isClickInsideBtn) {
+            bookmarksMenu.style.display = 'none';
+            
+            // Также закрываем контекстное меню, если оно есть
+            const ctxMenu = this.shadowRoot.getElementById('bookmark-context-menu');
+            if (ctxMenu) ctxMenu.style.display = 'none';
         }
-    });
+    }
 }
 
 
@@ -866,8 +904,10 @@ connectedCallback() {
 openNewWindow = (url) => {
     const root = this.shadowRoot;
     const fullContainer = root.getElementById('full-container');
+    // Генерируем уникальный ID для вкладки
     const id = btoa(url).slice(-15, -3) + url.length;
 
+    // Если такое окно уже открыто — просто переключаемся на него
     if (this.openedWindows.find(w => w.id === id)) {
         this.toggleWindow(id);
         return;
@@ -880,28 +920,67 @@ openNewWindow = (url) => {
     newFrame.style.width = '100%';
     newFrame.style.height = '100%';
 
-    // Обработка клавиш и мыши внутри webview
-    newFrame.addEventListener('dom-ready', () => {
-        newFrame.executeJavaScript(`
-            window.addEventListener('keydown', (e) => {
-                if (e.ctrlKey && e.code === 'KeyD') {
-                    e.preventDefault();
-                    console.log('WEBVIEW_ACTION:SAVE_BOOKMARK');
-                }
-            });
-            window.addEventListener('mouseup', (e) => {
-                if (e.button === 3) console.log('WEBVIEW_ACTION:GO_BACK');
-                if (e.button === 4) console.log('WEBVIEW_ACTION:GO_FORWARD');
-            });
-        `);
-        newFrame.insertCSS(`::-webkit-scrollbar { width: 0px !important; display: none !important; }`);
-    });
+    // 1. Внедряем скрипт в само окно (ПЕРЕДАТЧИК)
+newFrame.addEventListener('dom-ready', () => {
+    newFrame.executeJavaScript(`
+        // Обработка горячих клавиш
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.code === 'KeyD') {
+                e.preventDefault();
+                console.log('WEBVIEW_ACTION:SAVE_BOOKMARK');
+            }
+        });
 
+        // Обработка навигации кнопками мыши
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 3) console.log('WEBVIEW_ACTION:GO_BACK');
+            if (e.button === 4) console.log('WEBVIEW_ACTION:GO_FORWARD');
+        });
+
+        // ЗАКРЫТИЕ МЕНЮ: Передаем сигнал о клике в любой точке сайта
+        window.addEventListener('mousedown', () => {
+            console.log('WEBVIEW_ACTION:EXTERNAL_CLICK');
+        });
+    `);
+    newFrame.insertCSS(`
+        /* Скрываем скроллбар */
+        ::-webkit-scrollbar { 
+            width: 0px !important; 
+            display: none !important; 
+        }
+
+        /* СДВИГАЕМ ВЕСЬ САЙТ ВНИЗ НА 32 ПИКСЕЛЯ */
+        html, body {
+            margin-top: 14px !important; 
+            position: relative !important;
+        }
+    `);
+});
+
+    // 2. Слушаем сообщения от окна (ПРИЕМНИК) — ЭТО ТО, ЧТО ВЫ СПРАШИВАЛИ
     newFrame.addEventListener('console-message', (e) => {
-        const msg = e.message;
-        if (msg === 'WEBVIEW_ACTION:SAVE_BOOKMARK') this.saveBookmark();
-        if (msg === 'WEBVIEW_ACTION:GO_BACK' && newFrame.canGoBack()) newFrame.goBack();
-        if (msg === 'WEBVIEW_ACTION:GO_FORWARD' && newFrame.canGoForward()) newFrame.goForward();
+        const data = e.message;
+
+         // Если прилетел сигнал о клике — закрываем меню
+    if (data === 'WEBVIEW_ACTION:EXTERNAL_CLICK') {
+        const bookmarksMenu = this.shadowRoot.getElementById('bookmarks-menu');
+        if (bookmarksMenu) bookmarksMenu.style.display = 'none';
+        
+        const ctxMenu = this.shadowRoot.getElementById('bookmark-context-menu');
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    }
+        
+        // Сохранение закладки через сервис
+        if (data === 'WEBVIEW_ACTION:SAVE_BOOKMARK') {
+            const currentUrl = newFrame.getURL();
+            if (this.bookmarkService) {
+                this.saveBookmark();
+            }
+        }
+
+        // Навигация кнопками мыши
+        if (data === 'WEBVIEW_ACTION:GO_BACK' && newFrame.canGoBack()) newFrame.goBack();
+        if (data === 'WEBVIEW_ACTION:GO_FORWARD' && newFrame.canGoForward()) newFrame.goForward();
     });
 
     fullContainer.appendChild(newFrame);
@@ -966,83 +1045,122 @@ updateTaskbar = () => {
     });
 };
 
+// Найдите этот метод в вашем классе Tabs и замените его содержимым:
+async handleProxyRequest() {
+    const activeWebview = this.shadowRoot.querySelector(`webview[data-id="${this.activeWindowId}"]`) 
+                       || this.shadowRoot.querySelector('webview');
+    
+    if (activeWebview && window.electronAPI) {
+        try {
+            const url = new URL(activeWebview.getURL());
+            const domain = url.hostname;
+
+            // Используем invoke через proxyAPI или напрямую[cite: 5, 6]
+            if (window.proxyAPI && window.proxyAPI.addDomain) {
+                await window.proxyAPI.addDomain(domain);
+            } else {
+                await window.electronAPI.invoke('save-proxy-domain', domain);
+            }
+            
+            console.log(`Домен ${domain} отправлен в прокси`);
+        } catch (e) {
+            console.error("Ошибка домена:", e);
+        }
+    }
+}
+
 setupPreview() {
     const root = this.shadowRoot;
     const panel = root.getElementById('preview-panel');
     const frame = root.getElementById('preview-frame');
     const btnPreview = root.getElementById('close-preview-bar');
-  
-    // Добавьте это в setupPreview или там, где настраиваете поиск
-const searchInput = root.querySelector('search-bar');
+    const searchInput = root.querySelector('search-bar');
 
-if (searchInput) {
+    // --- 1. ЛОГИКА ПОИСКА ---
+    if (searchInput) {
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            // Получаем значение из input (учитывая Shadow DOM)
-            const inputVal = e.target.value || searchInput.shadowRoot.querySelector('input').value;
-            const trimInput = inputVal.trim();
+            // Пытаемся взять значение из самого события или из shadowRoot поисковика
+            const inputVal = e.target.value || (searchInput.shadowRoot && searchInput.shadowRoot.querySelector('input')?.value);
+            const trimInput = inputVal ? inputVal.trim() : "";
 
             if (trimInput) {
-                let searchUrl = "";
+                let searchUrl = CONFIG.search.engines.g[0];
                 let query = trimInput;
 
-                // Проверяем наличие тега (например, !y)
                 if (trimInput.startsWith('!')) {
-                    const parts = trimInput.split(' '); // Разделяем по пробелу
-                    const tag = parts[0].substring(1);  // Берем "y" из "!y"
-
-                    // Если такой тег есть в конфиге
+                    const parts = trimInput.split(' ');
+                    const tag = parts[0].substring(1);
                     if (CONFIG.search.engines[tag]) {
                         searchUrl = CONFIG.search.engines[tag][0];
-                        query = parts.slice(1).join(' '); // Берем всё, кроме тега
-                    } else {
-                        // Если тега нет в списке, ищем в Google (дефолт)
-                        searchUrl = CONFIG.search.engines.g[0];
+                        query = parts.slice(1).join(' ');
                     }
-                } else {
-                    // Если тега вообще нет — используем стандартный Google
-                    searchUrl = CONFIG.search.engines.g[0];
                 }
-
-                // Открываем окно с финальной ссылкой
                 this.openNewWindow(searchUrl + encodeURIComponent(query));
-
-                // Очищаем поле (и в обычном DOM, и в Shadow если нужно)
+                
+                // Очистка
                 if (e.target.value !== undefined) e.target.value = '';
-                const innerInput = searchInput.shadowRoot.querySelector('input');
+                const innerInput = searchInput.shadowRoot?.querySelector('input');
                 if (innerInput) innerInput.value = '';
             }
         }
     });
 }
-    // Инициализируем сервис закладок, передавая метод КЛАССА
-    this.bookmarkService = new BookmarkService(root, (url) => this.openNewWindow(url));
-    this.bookmarkService.render();
-  
+
+    // --- 2. СЕРВИС ЗАКЛАДОК ---
+    this.bookmarkService = new BookmarkService(this.shadowRoot, (url) => this.openNewWindow(url));
+
+    const bBtn = this.shadowRoot.getElementById('bookmarks-btn');
+    if (bBtn) {
+        bBtn.onclick = () => this.bookmarkService.toggleMenu();
+    }
+
+
+    // --- 3. КОНТЕКСТНОЕ МЕНЮ (ПКМ) ---
     root.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    const path = e.composedPath();
-    
-    // 1. Проверяем, не закладка ли это
-    const bookmarkItem = path.find(el => el.classList && el.classList.contains('bookmark-item'));
-    if (bookmarkItem) {
-        const url = bookmarkItem.dataset.url;
-        if (this.bookmarkService && this.bookmarkService.showContextMenu) {
-            this.bookmarkService.showContextMenu(e, url);
+        e.preventDefault();
+        const path = e.composedPath();
+        
+        // Проверка на закладку
+        const bookmarkItem = path.find(el => el.classList && el.classList.contains('bookmark-item'));
+        if (bookmarkItem) {
+            const url = bookmarkItem.dataset.url;
+            if (this.bookmarkService && this.bookmarkService.showContextMenu) {
+                this.bookmarkService.showContextMenu(e, url);
+            }
+            return;
         }
-        return; // Выходим, чтобы не сработал код ниже
+
+        // Проверка на обычную ссылку (открываем превью)
+        const link = path.find(el => el.tagName === 'A');
+        if (link && !path.some(el => el.id === 'taskbar')) {
+            frame.setAttribute('src', link.href);
+            panel.style.display = 'flex';
+            if (btnPreview) btnPreview.style.display = 'block';
+        }
+    });
+
+    // --- 4. КЛИКИ (ЛКМ) ---
+    root.addEventListener('click', (e) => {
+        const link = e.composedPath().find(el => el.tagName === 'A');
+        // Если это ссылка и по ней кликнули ЛКМ (button 0)
+        if (link && e.button === 0 && !e.composedPath().some(el => el.id === 'taskbar')) {
+            e.preventDefault();
+            this.openNewWindow(link.href);
+        }
+    });
+
+    // --- 5. УПРАВЛЕНИЕ ОКНОМ ПРЕВЬЮ ---
+    if (btnPreview) {
+        btnPreview.onclick = (e) => {
+            e.preventDefault();
+            panel.style.display = 'none';
+            frame.setAttribute('src', 'about:blank');
+            btnPreview.style.display = 'none';
+        };
     }
 
-    // 2. Проверяем, не обычная ли это ссылка (для превью)
-    const link = path.find(el => el.tagName === 'A');
-    if (link && !path.some(el => el.id === 'taskbar')) {
-        frame.setAttribute('src', link.href);
-        panel.style.display = 'flex';
-        if (btnPreview) btnPreview.style.display = 'block';
-    }
-});
-
-    // ВОЗВРАЩАЕМ ПРЕВЬЮ ДЛЯ ЗАКЛАДОК
+    // --- 6. ОБРАБОТЧИКИ СОБЫТИЙ КОМПОНЕНТА ---
     this.addEventListener('open-preview', (e) => {
         const url = e.detail.url;
         frame.setAttribute('src', url);
@@ -1050,56 +1168,20 @@ if (searchInput) {
         if (btnPreview) btnPreview.style.display = 'block';
     });
 
-    // Слушатель Ctrl+D (KeyD работает в любой раскладке)
+    this.addEventListener('toggle-bookmarks', () => {
+        this.bookmarkService.toggleMenu();
+        this.renderBookmarks();
+    });
+
+    // --- 7. ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ ---
     window.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.code === 'KeyD') {
             e.preventDefault();
             this.saveBookmark(); 
         }
     });
-    const { ipcRenderer } = require('electron');
-
-ipcRenderer.on('get-current-domain-for-proxy', () => {
-    // Ищем внутри Shadow Root текущего компонента
-    const activeWebview = this.shadowRoot.querySelector(`webview[data-id="${this.activeWindowId}"]`) 
-                       || this.shadowRoot.querySelector('webview');
+ 
     
-    if (activeWebview) {
-        try {
-            const url = new URL(activeWebview.getURL());
-            const domain = url.hostname; // Получаем чистый домен (например, google.com)
-            
-            // 2. Отправляем его обратно в main.js
-            ipcRenderer.send('save-proxy-domain', domain);
-            alert(`Домен ${domain} добавлен в исключения прокси`);
-        } catch (e) {
-            console.error("Ошибка при получении домена:", e);
-        }
-    }
-});
-
-    // Клик по ссылкам (ЛКМ - новое окно, ПКМ - превью)
-    root.addEventListener('click', (e) => {
-        const link = e.composedPath().find(el => el.tagName === 'A');
-        if (link && e.button === 0 && !e.composedPath().some(el => el.id === 'taskbar')) {
-            e.preventDefault();
-            this.openNewWindow(link.href);
-        }
-    });
-
-
-    if (btnPreview) {
-        btnPreview.onclick = () => {
-            panel.style.display = 'none';
-            frame.setAttribute('src', 'about:blank');
-            btnPreview.style.display = 'none';
-        };
-    }
-    
-    // Слушаем открытие статус-бара
-    this.addEventListener('toggle-bookmarks', () => {
-        this.bookmarkService.toggleMenu();
-        this.renderBookmarks();
-    });
-}
+   
+  }
 }

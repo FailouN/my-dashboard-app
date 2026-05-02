@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
@@ -8,18 +8,25 @@
     <link href="https://cdn.jsdelivr.net/gh/monzanifabio/cryptofont/cryptofont.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" type="text/css">
     <link href="src/css/style.css" rel="stylesheet" type="text/css">
-    <!-- <link href="src/css/tabler-icons.min.css" rel="stylesheet"> -->
     <link rel="icon" type="image/svg+xml" href="src/img/favico.svg">
     <title>Start Page</title>
   </head>
   <body>
+    <!-- 1. Подключаем файл компонента как обычный скрипт -->
+    <script src="./src/components/header.component.js"></script>
+
+    <!-- 2. Вызываем инициализацию -->
     <script>
-    const createHeader = require('./src/components/header.component.js');
-    window.addEventListener('DOMContentLoaded', () => {
-        createHeader();
-    });
-</script>
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof window.createHeader === 'function') {
+                window.createHeader();
+            }
+        });
+    </script>
+
     <tabs-list></tabs-list>
+
+    <!-- Остальные скрипты остаются без изменений -->
     <script type="text/javascript" src="src/common/utils.js"></script>
     <script type="text/javascript" src="src/common/storage.js"></script>
     <script type="text/javascript" src="src/common/actions.js"></script>
@@ -41,5 +48,4 @@
 
     <script type="text/javascript" src="src/common/module.js"></script>
   </body>
-
-</html> 
+</html>
