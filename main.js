@@ -2,6 +2,7 @@ const { app, BrowserWindow, globalShortcut, ipcMain, session, desktopCapturer, M
 const path = require('path');
 const fs = require('fs');
 const { setupBlocker } = require('./adblocker');
+const { setupScreenShare } = require('./screen-share');
 
 
 const { exec } = require('child_process');
@@ -43,6 +44,8 @@ if (!gpuActive) {
 }
 // Путь для папки-ссылки в директории программы
 const linkPath = path.join(process.cwd(), 'DATA_LINK'); 
+
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
 // Устанавливаем путь к userData до готовности приложения
 if (!fs.existsSync(userDataPath)) {
@@ -123,7 +126,7 @@ async function handleClearCookies() {
 
 // Определяем доступные UA
 const AGENTS = {
-    desktop: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    desktop: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
     mobile: "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36", // <--- ТУТ НУЖНА ЗАПЯТАЯ
     IosMobile: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1" // <--- ТУТ УБРАЛ ТОЧКУ С ЗАПЯТОЙ
 };
@@ -373,7 +376,7 @@ async function createWindow() {
             autoplayPolicy: 'no-user-gesture-required',
             touchEvents: true,
             webviewTag: true,
-            webSecurity: false,
+            webSecurity: true,
             allowRunningInsecureContent: true,
             nodeIntegration: false,
             contextIsolation: true,
@@ -403,16 +406,6 @@ win.webContents.on('before-input-event', (event, input) => {
     }
 });
 
-// Создание символьной ссылки (DATA_LINK)
-    if (!fs.existsSync(linkPath)) {
-        const command = `mklink /D "${linkPath}" "${userDataPath}"`;
-        exec(command, (err) => {
-            if (err) console.error('Ошибка создания ссылки (нужен Админ):', err.message);
-            else console.log('DATA_LINK created successfully.');
-        });
-    }
-
-
 setupBlocker(session.defaultSession);
 
      setUserAgent('desktop');
@@ -423,37 +416,7 @@ setupBlocker(session.defaultSession);
 
 
 
-    // Обработчик выбора экрана (Screen Sharing)
-    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
-        desktopCapturer.getSources({
-            types: ['screen', 'window'],
-            thumbnailSize: { width: 150, height: 150 },
-            fetchWindowIcons: true
-        }).then((sources) => {
-            const filteredSources = sources.filter(source => {
-                const name = source.name.toLowerCase();
-                if (!name || name.trim() === "") return false;
-                if (name.includes('.ini')) return false; // Скрываем Rainmeter
-
-                const junkApps = ['nvidia geforce overlay', 'settings', 'параметры', 'program manager'];
-                if (junkApps.some(junk => name.includes(junk))) return false;
-                if (source.thumbnail.isEmpty()) return false;
-                return true;
-            });
-
-            const menu = Menu.buildFromTemplate(
-                filteredSources.map((source) => ({
-                    label: source.name,
-                    click: () => callback({ video: source, audio: 'loopback' })
-                }))
-            );
-            if (filteredSources.length > 0) {
-                menu.popup();
-            } else {
-                console.log("Actiw window not found.");
-            }
-        });
-    });
+    setupScreenShare(session.defaultSession);
        
 
     // Снятие защиты заголовков (CORS/X-Frame)
@@ -501,7 +464,6 @@ ipcMain.handle('select-file', async () => {
     const sourcePath = filePaths[0];
     
     // 3. Получаем путь к папке данных пользователя (AppData/Roaming/название_вашего_апп)
-    const userDataPath = app.getPath('userData');
     const assetsFolder = path.join(userDataPath, 'user_assets');
 
     // 4. Проверяем, существует ли папка, если нет — создаем
@@ -547,6 +509,22 @@ app.whenReady().then(() => {
         focusedWin.webContents.send('fullscreen-toggled', state);
     }
 });
+    // Alt + F1: Глобальный переключатель музыки/видео
+    globalShortcut.register('Alt+`', () => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win) {
+            // Отправляем сигнал в tabs.component
+            win.webContents.send('hotkey-action', { type: 'MEDIA_CONTROL', command: 'toggle' });
+        }
+    });
+
+    // Alt + F2: Например, быстро открыть YouTube или почту
+    globalShortcut.register('Alt+F2', () => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (win) {
+            win.webContents.send('hotkey-action', { type: 'OPEN_URL', url: 'https://youtube.com' });
+        }
+    });
     
     // Проверка обновлений через 3 сек
     setTimeout(() => { 
@@ -564,8 +542,9 @@ app.on('will-quit', () => {
     globalShortcut.unregisterAll();
 });
 
-ipcMain.handle('window-minimize', () => {
-    BrowserWindow.getFocusedWindow().minimize();
+ipcMain.handle('window-minimize', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.minimize();
 });
 
 ipcMain.handle('window-maximize', (event) => {
@@ -577,10 +556,9 @@ ipcMain.handle('window-maximize', (event) => {
     }
 });
 
-    setTimeout(() => { autoUpdater.checkForUpdatesAndNotify(); }, 3000);
-
-ipcMain.handle('window-close', () => {
-    BrowserWindow.getFocusedWindow().close();
+ipcMain.handle('window-close', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (win) win.close();
 });
 
 ipcMain.handle('show-context-menu', (event) => {
@@ -601,8 +579,8 @@ function removeProxyDomain(domain) {
             let list = JSON.parse(fs.readFileSync(proxyBypassPath, 'utf8'));
             list = list.filter(d => d !== domain);
             fs.writeFileSync(proxyBypassPath, JSON.stringify(list));
-            applyProxySettings(); // Применяем новые настройки прокси[cite: 4]
-            createApplicationMenu(); // Обновляем само меню[cite: 4]
+            applyProxySettings(); // Применяем новые настройки прокси
+            createApplicationMenu(); // Обновляем само меню
         } catch (e) { 
             console.error("Ошибка при удалении домена:", e); 
         }

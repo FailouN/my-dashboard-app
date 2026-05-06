@@ -2196,7 +2196,7 @@
 .ti-brand-dingtalk:before {
   content: "\f5ea";
 }
-.ti-brand-discord:before {
+.ti-discord:before {
   content: "\ece3";
 }
 .ti-brand-discord-filled:before {
@@ -2796,7 +2796,7 @@
 .ti-brand-ted:before {
   content: "\f658";
 }
-.ti-brand-telegram:before {
+.ti-telegram:before {
   content: "\ec26";
 }
 .ti-brand-terraform:before {
@@ -2895,7 +2895,7 @@
 .ti-brand-vivaldi:before {
   content: "\f210";
 }
-.ti-brand-vk:before {
+.ti-vk:before {
   content: "\ed72";
 }
 .ti-brand-vlc:before {
@@ -2979,13 +2979,13 @@
 .ti-brand-ycombinator:before {
   content: "\edd9";
 }
-.ti-brand-youtube:before {
+.ti-youtube:before {
   content: "\ec90";
 }
-.ti-brand-youtube-filled:before {
+.ti-youtube-filled:before {
   content: "\fc22";
 }
-.ti-brand-youtube-kids:before {
+.ti-youtube-kids:before {
   content: "\f214";
 }
 .ti-brand-zalando:before {
@@ -13989,4 +13989,5 @@
 .ti-zzz-off:before {
   content: "\f440";
 }
+
 /*# sourceMappingURL=tabler-icons.min.css.map */

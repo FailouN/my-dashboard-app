@@ -125,21 +125,28 @@ class BookmarkService {
     }
 
     render() {
-        const menu = this.root.getElementById('bookmarks-menu');
-        if (!menu) return;
+    const menu = this.root.getElementById('bookmarks-menu');
+    if (!menu) return;
 
-        const bookmarks = this.getBookmarks();
-        menu.innerHTML = bookmarks.map(bookmark => {
-            let domain = "link";
-            try { domain = new URL(bookmark.url).hostname; } catch(e) {}
-            
-            return `
-                <div class="bookmark-item" data-url="${bookmark.url}">
-                    <img src="https://www.google.com/s2/favicons?sz=32&domain=${domain}">
-                    <span title="${bookmark.url}">${bookmark.title}</span>
-                </div>
-            `;
-        }).join('');
+    const bookmarks = this.getBookmarks();
+    menu.innerHTML = bookmarks.map(bookmark => {
+        let domain = "link";
+        try { domain = new URL(bookmark.url).hostname; } catch(e) {}
+        
+        // --- ДОБАВЛЯЕМ ЛОГИКУ ОБРЕЗКИ ТУТ ---
+        const maxLength = 22; // Золотая середина (20-25)
+        const displayTitle = bookmark.title.length > maxLength 
+            ? bookmark.title.substring(0, maxLength) + '...' 
+            : bookmark.title;
+        // ------------------------------------
+
+        return `
+            <div class="bookmark-item" data-url="${bookmark.url}">
+                <img src="https://www.google.com/s2/favicons?sz=32&domain=${domain}">
+                <span title="${bookmark.title}">${displayTitle}</span>
+            </div>
+        `;
+    }).join('');
 
         menu.querySelectorAll('.bookmark-item').forEach(el => {
             el.onclick = () => {

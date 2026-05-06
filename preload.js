@@ -12,37 +12,46 @@ const validChannels = [
     'window-maximize',   
     'window-close',
     'fullscreen-toggled',
-    'get-proxy-bypass-list', // Добавьте это
+    'get-proxy-bypass-list',
     'get-current-domain-for-proxy',
-    'save-proxy-domain',     // Добавьте это
-    'delete-proxy-domain'    // Добавьте это
+    'save-proxy-domain',   
+    'delete-proxy-domain',
+    'hotkey-action' 
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {
     send: (channel, data) => {
         if (validChannels.includes(channel)) {
-            ipcRenderer.removeAllListeners(channel);
-            ipcRenderer.on(channel, (event, ...args) => callback(event, ...args));
+            // Передаем только данные, игнорируя системные объекты
+            ipcRenderer.send(channel, data);
         }
     },
     
     on: (channel, func) => {
         if (validChannels.includes(channel)) {
-            const subscription = (event, ...args) => func(...args);
+            // Создаем обертку, которая пробрасывает ТОЛЬКО полезную нагрузку (args)
+            // и полностью отсекает объект event, который нельзя клонировать
+            const subscription = (_event, ...args) => func(...args);
+            
             ipcRenderer.on(channel, subscription);
-            return () => ipcRenderer.removeListener(channel, subscription);
+            
+            // Возвращаем функцию отписки (чистильщик)
+            return () => {
+                ipcRenderer.removeListener(channel, subscription);
+            };
         }
     },
     
     invoke: (channel, data) => {
-        if (validChannels.includes(channel)) { // Рекомендуется проверять и здесь[cite: 3]
+        if (validChannels.includes(channel)) {
             return ipcRenderer.invoke(channel, data);
         }
     },
-    // Теперь метод добавлен корректно через запятую[cite: 3]
+    
     showMenu: () => ipcRenderer.invoke('show-context-menu') 
 });
 
+// Для прокси лучше тоже использовать проверку каналов для безопасности
 contextBridge.exposeInMainWorld('proxyAPI', {
     getBypassList: () => ipcRenderer.invoke('get-proxy-bypass-list'),
     addDomain: (domain) => ipcRenderer.invoke('save-proxy-domain', domain),
