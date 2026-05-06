@@ -418,27 +418,6 @@ setupBlocker(session.defaultSession);
 
     setupScreenShare(session.defaultSession);
        
-
-    // Снятие защиты заголовков (CORS/X-Frame)
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-        const responseHeaders = details.responseHeaders;
-        const blockList = ['x-frame-options', 'content-security-policy', 'frame-ancestors'];
-        
-        Object.keys(responseHeaders).forEach(header => {
-            if (blockList.includes(header.toLowerCase())) {
-                delete responseHeaders[header];
-            }
-        });
-
-        // ПРИНУДИТЕЛЬНО РАЗРЕШАЕМ ВСЁ ДЛЯ ВИДЕО
-        responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-        // Помогаем YouTube понять, что мы свои
-        if (details.url.includes('youtube.com')) {
-            responseHeaders['Feature-Policy'] = ["autoplay 'self'; fullscreen 'self'"];
-        }
-
-        callback({ cancel: false, responseHeaders });
-    });
 }
 
 // Авторизация на прокси
@@ -586,4 +565,3 @@ function removeProxyDomain(domain) {
         }
     }
 }
-
