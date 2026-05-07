@@ -182,11 +182,7 @@ closeWindow = (id) => {
     const root = this.shadowRoot;
     const fullContainer = root.getElementById('full-container');
     const wv = this.shadowRoot.querySelector(`webview[data-id="${id}"]`);
-    if (wv) {
-        wv.stop(); // Остановить загрузку
-        wv.src = 'about:blank'; // Очистить память процесса
-        wv.remove();
-        }
+
     this.openedWindows = this.openedWindows.filter(w => w.id !== id);
     if (this.activeWindowId === id) {
         this.activeWindowId = null;

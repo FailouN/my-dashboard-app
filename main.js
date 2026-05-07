@@ -1,8 +1,10 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, session, desktopCapturer, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { setupBlocker } = require('./adblocker');
+const { setupBlocker, disableBlocker } = require('./adblocker');
 const { setupScreenShare } = require('./screen-share');
+
+let isAdBlockEnabled = true;
 
 
 const { exec } = require('child_process');
@@ -301,6 +303,39 @@ function createApplicationMenu() {
                     ]
                 },
                 {
+    label: 'Блокировщик рекламы',
+    type: 'checkbox',
+    checked: isAdBlockEnabled,
+    click: async () => {
+        isAdBlockEnabled = !isAdBlockEnabled;
+        
+        if (isAdBlockEnabled) {
+            await setupBlocker(session.defaultSession);
+        } else {
+            await disableBlocker(session.defaultSession);
+            
+            // КРИТИЧЕСКИ ВАЖНО ДЛЯ ТЕСТОВ:
+            // Очищаем кэш и данные HTTP, чтобы сайты увидели изменения мгновенно
+            await session.defaultSession.clearStorageData({
+                storages: ['cachestorage', 'shadercache']
+            });
+        }
+
+        // ОБЯЗАТЕЛЬНО: Перерисовываем меню, чтобы зафиксировать галочку
+        createApplicationMenu();
+        
+        // Уведомление
+        dialog.showMessageBox({
+            type: 'info',
+            message: `Блокировщик ${isAdBlockEnabled ? 'ВКЛЮЧЕН' : 'ВЫКЛЮЧЕН'}`,
+            detail: 'Приложения и вкладки автоматически обновятся.'
+        });
+
+        // Перезагружаем все окна, чтобы применить настройки
+        BrowserWindow.getAllWindows().forEach(w => w.reload());
+    }
+},
+                {
             label: 'Аппаратное ускорение',
             type: 'checkbox',
             checked: gpuActive,
@@ -388,7 +423,7 @@ async function createWindow() {
         }
     });
 
-
+setupBlocker(session.defaultSession);
 
 
 // Оставляем Alt в before-input-event, так как он специфичен для окна
@@ -406,8 +441,6 @@ win.webContents.on('before-input-event', (event, input) => {
     }
 });
 
-setupBlocker(session.defaultSession);
-
      setUserAgent('desktop');
 
   applyProxySettings().then(() => {
@@ -416,8 +449,7 @@ setupBlocker(session.defaultSession);
 
 
 
-    setupScreenShare(session.defaultSession);
-       
+    setupScreenShare(session.defaultSession);      
 }
 
 // Авторизация на прокси
