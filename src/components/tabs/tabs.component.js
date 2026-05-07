@@ -43,20 +43,60 @@ connectedCallback() {
     window.addEventListener('keydown', this.handleGlobalKeyDown);
 
     if (window.electronAPI) {
-        // Сохраняем функции отписки, которые возвращает наш preload.js
-        this._unsubscribeHotkey = window.electronAPI.on('hotkey-action', async (data) => {
-            if (data.type === 'MEDIA_CONTROL') {
-                // Используем менеджер, который мы уже отладили
-                // Передаем root (shadowRoot), чтобы он нашел все webview
-                if (typeof HotkeyManager !== 'undefined') {
-                    await HotkeyManager.execute(this.shadowRoot);
+        // 1. Автоответ в Дискорде (сохраняем отписку)
+       this._unsubscribeDiscord = window.electronAPI.on('execute-discord-answer', () => {
+    const allFrames = this.shadowRoot.querySelectorAll('webview');
+    
+    allFrames.forEach(frame => {
+        // ПРОВЕРКА 1: Проверяем, не пустой ли src и вставлен ли элемент в DOM
+        if (!frame.src || frame.src === 'about:blank' || !frame.parentNode) return;
+
+        const script = `
+            (function() {
+                if (!window.location.hostname.includes('discord.com')) return;
+
+                const btn = document.querySelector('button[aria-label="Присоединиться к звонку"]') || 
+                            document.querySelector('button[aria-label*="Присоединиться"]') ||
+                            document.querySelector('button[aria-label*="Принять"]') ||
+                            document.querySelector('.join_f1ceac');
+
+                if (btn) {
+                    const clickEvent = new MouseEvent('click', {
+                        view: window, bubbles: true, cancelable: true
+                    });
+                    btn.dispatchEvent(clickEvent);
+                    btn.click();
+                    console.log('Discord: Answered!');
                 }
+            })();
+        `;
+
+        // ПРОВЕРКА 2: Используем try-catch для обработки "не готовых" webview
+        try {
+            // executeJavaScript можно вызывать только если dom-ready уже был
+            // Если вы не уверены, лучше добавить проверку через внутренний метод
+            if (frame.getWebContentsId) { // Если ID уже присвоен, значит webview инициализирован
+                frame.executeJavaScript(script).catch(err => {
+                    // Игнорируем ошибки, если вкладка просто не успела загрузиться
+                    console.warn("Webview не готов к выполнению скрипта");
+                });
+            }
+        } catch (e) {
+            console.error("Критическая ошибка при обращении к webview:", e);
+        }
+    });
+});
+
+        // 2. Медиа-клавиши
+        this._unsubscribeHotkey = window.electronAPI.on('hotkey-action', async (data) => {
+            if (data.type === 'MEDIA_CONTROL' && typeof HotkeyManager !== 'undefined') {
+                await HotkeyManager.execute(this.shadowRoot);
             }
         });
 
-        // 2. Слушаем прокси (ОСТАВЛЯЕМ ТОЛЬКО ЭТОТ ВЫЗОВ)[cite: 4]
-        window.electronAPI.on('get-current-domain-for-proxy', () => {
-            this.handleProxyRequest(); // Вся логика теперь будет жить в этом методе ниже
+        // 3. Прокси
+        this._unsubscribeProxy = window.electronAPI.on('get-current-domain-for-proxy', () => {
+            this.handleProxyRequest();
         });
     }
 
@@ -65,6 +105,7 @@ connectedCallback() {
 
 disconnectedCallback() {
     // 1. Отписки от Electron IPC
+    if (this._unsubscribeDiscord) this._unsubscribeDiscord();
     if (this._unsubscribeHotkey) this._unsubscribeHotkey();
     if (this._unsubscribeProxy) this._unsubscribeProxy();
     

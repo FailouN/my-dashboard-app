@@ -501,46 +501,59 @@ ipcMain.handle('select-file', async () => {
     }
 });
 // Запуск приложения
-app.whenReady().then(() => {
-    // Применяем прокси до открытия окон
-    applyProxySettings();
+app.whenReady().then(async () => {
+    // 1. Сначала применяем прокси (если это нужно глобально до запуска окон)
+    await applyProxySettings();
     
-    // Создаем меню
+    // 2. Создаем меню
     createApplicationMenu();
     
-    // Создаем главное окно
-    createWindow();
- 
+    // 3. Создаем главное окно
+    await createWindow();
+
+    // --- РЕГИСТРАЦИЯ ГЛОБАЛЬНЫХ ХОТКЕЕВ ---
+    
+    // F11: Полноэкранный режим
     globalShortcut.register('F11', () => {
-    const focusedWin = BrowserWindow.getFocusedWindow();
-    if (focusedWin) {
-        const state = !focusedWin.isFullScreen();
-        focusedWin.setFullScreen(state);
-        focusedWin.setMenuBarVisibility(false);
-        focusedWin.webContents.send('fullscreen-toggled', state);
-    }
-});
-    // Alt + F1: Глобальный переключатель музыки/видео
+        const focusedWin = BrowserWindow.getFocusedWindow();
+        if (focusedWin) {
+            const state = !focusedWin.isFullScreen();
+            focusedWin.setFullScreen(state);
+            focusedWin.setMenuBarVisibility(false);
+            focusedWin.webContents.send('fullscreen-toggled', state);
+        }
+    });
+
+    // Alt + Ё: Автоответ в Дискорде
     globalShortcut.register('Alt+`', () => {
+        BrowserWindow.getAllWindows().forEach(win => {
+            win.webContents.send('execute-discord-answer');
+        });
+        console.log('Global Hotkey: Alt+Ё pressed');
+    });
+
+    // Alt + F3: Глобальный переключатель музыки/видео
+    globalShortcut.register('Alt+F3', () => {
+        // Лучше отправлять всем окнам или конкретно главному
         const win = BrowserWindow.getAllWindows()[0];
         if (win) {
-            // Отправляем сигнал в tabs.component
             win.webContents.send('hotkey-action', { type: 'MEDIA_CONTROL', command: 'toggle' });
         }
     });
 
-    // Alt + F2: Например, быстро открыть YouTube или почту
+    // Alt + F2: Быстрый YouTube
     globalShortcut.register('Alt+F2', () => {
         const win = BrowserWindow.getAllWindows()[0];
         if (win) {
             win.webContents.send('hotkey-action', { type: 'OPEN_URL', url: 'https://youtube.com' });
         }
     });
-    
-    // Проверка обновлений через 3 сек
+
+    // --- ПРОВЕРКА ОБНОВЛЕНИЙ ---
     setTimeout(() => { 
         autoUpdater.checkForUpdatesAndNotify(); 
     }, 3000);
+
 });
 
 

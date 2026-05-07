@@ -6,6 +6,7 @@
   font-family: "tabler-icons";
   font-style: normal;
   font-weight: 400;
+  font-display: swap;
   src: url("../fonts/tabler-icons.ttf?v2.33.0") format("truetype");
   /* src: */
   /*   url("../fonts/tabler-icons.eot?#iefix-v2.33.0") format("embedded-opentype"), */
