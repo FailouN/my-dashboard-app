@@ -209,7 +209,7 @@ If WebHub is useful to you — consider giving it a ⭐
 MIT
 
 RU
-\# WebHub Desktop 🚀
+# WebHub Desktop 🚀
 
 
 
