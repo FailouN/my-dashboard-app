@@ -12,19 +12,36 @@ window.tabsStyles = `
     #full-window {
     display: none;
     position: fixed;
-    top: 0px;
+    /* Используем переменную. По умолчанию 32px */
+    top: var(--win-top, 32px); 
     left: 0px;
     right: 0px;
+    /* В обычном режиме снизу 60px под статус-бар */
     bottom: 60px; 
     
     background: #1a1b26;
     border-radius: 0 0 15px 15px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
-    z-index: 5000; 
-    
+    z-index: 5000;
     flex-direction: column;
     overflow: hidden;
+    transition: top 0.2s, bottom 0.2s; /* Плавный переход */
+}
+
+:host-context(body.is-fullscreen) #full-window {
+    --win-top: 0px !important;
+    top: 0px !important;       /* Принудительно дублируем для надежности */
+    bottom: 60px !important;
+    border-radius: 0 0 15px 15px !important;
+}
+
+/* На всякий случай добавим обычный селектор для совместимости */
+body.is-fullscreen #full-window {
+    --win-top: 0px !important;
+    top: 0px !important;
+    bottom: 60px !important;
+    border-radius: 0 0 15px 15px !important;
 }
 
 #full-frame {
@@ -236,14 +253,14 @@ status-bar {
       #panels {
           border-radius: 15px;
           /* Устанавливаем 16:9 на основе ширины */
-          width: 1200px; 
-          height: 675px;
+          width: 70%; 
+          height: 70%;
           right: 0;
           left: 0;
           top: 0;
           bottom: 0;
           margin: auto;
-          position: absolute;
+          position: center;
           box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
           background: #282828;
           overflow: hidden;

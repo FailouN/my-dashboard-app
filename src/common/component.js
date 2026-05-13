@@ -3,6 +3,7 @@ const RenderedComponents = {};
 class Component extends HTMLElement {
   refs = {};
 
+  // Оставил ресурсы как в исходнике, чтобы ссылки в других файлах не отвалились
   resources = {
     fonts: {
       roboto: '<link href="https://fonts.googleapis.com/css?family=Roboto:100,400,700" rel="stylesheet">',
@@ -21,7 +22,6 @@ class Component extends HTMLElement {
 
   constructor() {
     super();
-
     this.shadow = this.attachShadow({ mode: 'open' });
   }
 
@@ -29,78 +29,63 @@ class Component extends HTMLElement {
   template() { return null; }
   imports()  { return []; }
 
-  /**
-   * Reference an external css file
-   * OBS: External style loading not yet fully supported with web components, causes flickering.
-   * @param {string} path
-   * @returns {void}
-   */
   set stylePath(path) {
     this.resources.style = `<link rel="preload" as="style" href="${path}" onload="this.rel='stylesheet'">`;
   }
 
-  /**
-   * Return all the imports that a component requested.
-   * @returns {Array<string>} imports
-   */
   get getResources() {
     const imports = this.imports();
-
-    if (this.resources?.style)
-      imports.push(this.resources.style);
-
+    if (this.resources?.style) imports.push(this.resources.style);
     return imports;
   }
 
-  /**
-   * Return inline style tag.
-   * @returns {string}
-   */
   async loadStyles() {
     let html = this.getResources.join("\n");
-
-    if (this.style())
-      html += `<style>${this.style()}</style>`;
-
+    const styleContent = this.style();
+    if (styleContent) html += `<style>${styleContent}</style>`;
     return html;
   }
 
-  /**
-   * Build the component's HTML body.
-   * @returns {string} html
-   */
   async buildHTML() {
-    return await this.loadStyles() +
-           await this.template();
+    return await this.loadStyles() + await this.template();
   }
 
-  /**
-   * Create a reference for manipulating DOM elements.
-   * @returns {Proxy<HTMLElement | boolean>}
-   */
+  // Оставил твою логику Proxy, но починил работу с селекторами
   createRef() {
     return new Proxy(this.refs, {
       get: (target, prop) => {
-        const ref = target[prop];
-        const elems = this.shadow.querySelectorAll(ref);
+        const selector = target[prop];
+        if (!selector) return null;
 
-        if (elems.length > 1) return elems;
-
-        const element = elems[0];
-
-        if (!element) return ref;
-
-        return element;
+        const elems = this.shadow.querySelectorAll(selector);
+        if (elems.length > 1) return Array.from(elems);
+        if (elems.length === 1) return elems[0];
+        
+        return selector;
       },
       set: (target, prop, value) => {
-        this.shadow.querySelector(target[prop]).innerHTML = value;
+        const el = this.shadow.querySelector(target[prop]);
+        if (el) el.innerHTML = value;
         return true;
       }
     });
   }
 
+  // Самое важное: чистим за собой при удалении компонента
+  disconnectedCallback() {
+    delete RenderedComponents[this.localName];
+  }
+
   async render() {
-    this.shadow.innerHTML = await this.buildHTML();
+    // Используем DocumentFragment для быстрой вставки без лишнего мерцания
+    const html = await this.buildHTML();
+    const template = document.createElement('template');
+    template.innerHTML = html;
+    
+    // Очищаем и вставляем
+    this.shadow.innerHTML = ''; 
+    this.shadow.appendChild(template.content.cloneNode(true));
+
     this.refs = this.createRef();
     RenderedComponents[this.localName] = this;
   }

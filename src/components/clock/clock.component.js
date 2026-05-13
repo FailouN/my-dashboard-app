@@ -6,7 +6,8 @@ class Clock extends Component {
 
   constructor() {
     super();
-  }
+    this._intervalId = null; // Храним ID таймера
+}
 
   imports() {
     return [
@@ -45,16 +46,29 @@ class Clock extends Component {
 
   setTime() {
     const date = new Date();
+    
+    // Вместо strftime используем стандартные методы:
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const seconds = date.getSeconds().toString().padStart(2, '0');
 
-    this.refs.clock = date.strftime(CONFIG.clock.format);
+    // Если тебе нужен формат HH:MM:SS
+    this.refs.clock.textContent = `${hours}:${minutes}`;
   }
 
   connectedCallback() {
     this.render().then(() => {
-      this.setTime();
-      this.setIconColor();
-
-      setInterval(() => this.setTime(), 1000);
+        this.setTime();
+        this.setIconColor();
+        // Очищаем старый интервал перед созданием нового, если он был
+        if (this._intervalId) clearInterval(this._intervalId);
+        this._intervalId = setInterval(() => this.setTime(), 1000);
     });
   }
+
+  // Добавь этот метод, чтобы таймер останавливался при закрытии компонента
+  disconnectedCallback() {
+    if (this._intervalId) clearInterval(this._intervalId);
+  }
+
 }

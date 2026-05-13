@@ -43,58 +43,21 @@ connectedCallback() {
     window.addEventListener('keydown', this.handleGlobalKeyDown);
 
     if (window.electronAPI) {
-        // 1. Автоответ в Дискорде (сохраняем отписку)
-       this._unsubscribeDiscord = window.electronAPI.on('execute-discord-answer', () => {
-    const allFrames = this.shadowRoot.querySelectorAll('webview');
-    
-    allFrames.forEach(frame => {
-        // ПРОВЕРКА 1: Проверяем, не пустой ли src и вставлен ли элемент в DOM
-        if (!frame.src || frame.src === 'about:blank' || !frame.parentNode) return;
-
-        const script = `
-            (function() {
-                if (!window.location.hostname.includes('discord.com')) return;
-
-                const btn = document.querySelector('button[aria-label="Присоединиться к звонку"]') || 
-                            document.querySelector('button[aria-label*="Присоединиться"]') ||
-                            document.querySelector('button[aria-label*="Принять"]') ||
-                            document.querySelector('.join_f1ceac');
-
-                if (btn) {
-                    const clickEvent = new MouseEvent('click', {
-                        view: window, bubbles: true, cancelable: true
-                    });
-                    btn.dispatchEvent(clickEvent);
-                    btn.click();
-                    console.log('Discord: Answered!');
-                }
-            })();
-        `;
-
-        // ПРОВЕРКА 2: Используем try-catch для обработки "не готовых" webview
-        try {
-            // executeJavaScript можно вызывать только если dom-ready уже был
-            // Если вы не уверены, лучше добавить проверку через внутренний метод
-            if (frame.getWebContentsId) { // Если ID уже присвоен, значит webview инициализирован
-                frame.executeJavaScript(script).catch(err => {
-                    // Игнорируем ошибки, если вкладка просто не успела загрузиться
-                    console.warn("Webview не готов к выполнению скрипта");
-                });
-            }
-        } catch (e) {
-            console.error("Критическая ошибка при обращении к webview:", e);
+    window.electronAPI.on('fullscreen-toggled', (isFullScreen) => {
+        // ЭТО КРИТИЧЕСКИ ВАЖНО: вешаем класс на самый верхний уровень
+        if (isFullScreen) {
+            document.body.classList.add('is-fullscreen');
+        } else {
+            document.body.classList.remove('is-fullscreen');
         }
     });
-});
+}
 
-        // 2. Медиа-клавиши
-        this._unsubscribeHotkey = window.electronAPI.on('hotkey-action', async (data) => {
-            if (data.type === 'MEDIA_CONTROL' && typeof HotkeyManager !== 'undefined') {
-                await HotkeyManager.execute(this.shadowRoot);
-            }
-        });
+    // Инициализируем сервис управления
+    this.remoteService = new RemoteControlService(this.shadowRoot);
+    this.remoteService.init();
 
-        // 3. Прокси
+    if (window.electronAPI) {
         this._unsubscribeProxy = window.electronAPI.on('get-current-domain-for-proxy', () => {
             this.handleProxyRequest();
         });
@@ -104,15 +67,16 @@ connectedCallback() {
 }
 
 disconnectedCallback() {
-    // 1. Отписки от Electron IPC
-    if (this._unsubscribeDiscord) this._unsubscribeDiscord();
+    // Очистка нового сервиса
+    if (this.remoteService) this.remoteService.destroy();
+    
+    // Очистка старых подписок (если остались)
     if (this._unsubscribeHotkey) this._unsubscribeHotkey();
     if (this._unsubscribeProxy) this._unsubscribeProxy();
+    if (this._unsubscribeFS) this._unsubscribeFS();
     
-    // 2. Очистка глобальных событий (если вынесли их в методы)
     window.removeEventListener('keydown', this.handleGlobalKeyDown);
-    
-    // 3. Очистка таймеров
+    window.addEventListener('click', this.closeBookmarksIfClickedOutside);
     if (this._previewTimeout) clearTimeout(this._previewTimeout);
 }
 
@@ -152,6 +116,7 @@ openNewWindow = (url) => {
     const newFrame = document.createElement('webview');
     newFrame.setAttribute('src', url);
     newFrame.setAttribute('data-id', id);
+    newFrame.setAttribute('allowfullscreen', 'true');
     newFrame.setAttribute('useragent', "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36");
     newFrame.style.width = '100%';
     newFrame.style.height = '100%';
@@ -221,15 +186,36 @@ toggleWindow = (id) => {
 
 closeWindow = (id) => {
     const root = this.shadowRoot;
-    const fullContainer = root.getElementById('full-container');
-    const wv = this.shadowRoot.querySelector(`webview[data-id="${id}"]`);
+    const wv = root.querySelector(`webview[data-id="${id}"]`);
 
+    if (wv) {
+        // 1. ПРИНУДИТЕЛЬНАЯ ОЧИСТКА (Марафет)
+        try {
+            wv.stop(); // Останавливаем все загрузки
+            wv.setUserAgent(""); // Сбрасываем UA, чтобы разорвать привязки
+            wv.src = 'about:blank'; // Уводим на пустую страницу, чтобы очистить JS-контекст
+        } catch (e) {
+            console.warn("Webview уже был частично выгружен");
+        }
+        
+        // 2. ФИЗИЧЕСКОЕ УДАЛЕНИЕ
+        wv.remove(); 
+    }
+
+    // 3. ОБНОВЛЕНИЕ СОСТОЯНИЯ
     this.openedWindows = this.openedWindows.filter(w => w.id !== id);
+
     if (this.activeWindowId === id) {
         this.activeWindowId = null;
-        root.getElementById('full-window').style.display = 'none';
+        const fullWin = root.getElementById('full-window');
+        if (fullWin) fullWin.style.display = 'none';
     }
+
+    // 4. ГИГИЕНА: Вызываем сборщик мусора (необязательно, но полезно)
     this.updateTaskbar();
+    
+    // Если вкладок не осталось, можно принудительно почистить память через IPC, 
+    // но для начала хватит и этих правок.
 };
 
 updateTaskbar = () => {

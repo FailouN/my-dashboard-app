@@ -17,7 +17,11 @@ const validChannels = [
     'save-proxy-domain',   
     'delete-proxy-domain',
     'hotkey-action',
-    'execute-discord-answer'
+    'execute-discord-answer',
+    'execute-discord-mute',
+    'execute-yandex-play',
+    'execute-yandex-next',
+    'execute-yandex-prev'
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {

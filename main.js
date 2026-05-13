@@ -419,19 +419,53 @@ async function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             offscreen: false, 
             canvas: true,     
-            webgl: true
+            webgl: true, 
+            enableRemoteModule: false,
+            backgroundThrottling: false
         }
     });
 
-const ses = win.webContents.session;
+    win.webContents.session.setPermissionCheckHandler((webContents, permission) => {
+    if (permission === 'fullscreen') return true;
+    return true; 
+});
 
-    // 1. Инициализируем блокировщик (если включен)
-    if (isAdBlockEnabled) {
-        setupBlocker(ses);
+win.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'fullscreen') {
+        callback(true);
+    } else {
+        callback(true);
     }
+});
 
-    // 2. Инициализируем захват экрана (наш новый красивый модуль)
-    setupScreenShare(ses);
+// --- 2. ОБРАБАТЫВАЕМ ПЕРЕКЛЮЧЕНИЕ (твои текущие функции) ---
+win.webContents.on('enter-html-full-screen', () => {
+    win.setFullScreen(true);
+    win.webContents.send('fullscreen-toggled', true); 
+});
+
+win.webContents.on('leave-html-full-screen', () => {
+    win.setFullScreen(false);
+    win.webContents.send('fullscreen-toggled', false); 
+});
+
+    win.webContents.once('dom-ready', () => {
+        const ses = win.webContents.session;
+ 
+         // Проверка, что мы не на пустой странице
+        const url = win.webContents.getURL();
+        if (url === 'about:blank') return;
+        
+        // 1. Инициализируем блокировщик (если включен)
+        if (isAdBlockEnabled) {
+            setupBlocker(ses);
+        }
+
+        // 2. Инициализируем захват экрана
+        setupScreenShare(ses);
+        
+        console.log("Система: Модули AdBlock и ScreenShare подключены после готовности DOM.");
+    });
 
 
      setUserAgent('desktop');
@@ -453,46 +487,54 @@ app.on('login', (event, webContents, request, authInfo, callback) => {
     }
 });
 
-ipcMain.handle('select-file', async () => {
-    // 1. Получаем окно для модальности
-    const win = BrowserWindow.getFocusedWindow();
-    
-    // 2. Открываем диалог выбора файла
-    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-        properties: ['openFile'],
-        filters: [{ name: 'Images', extensions: ['jpg', 'png', 'gif', 'webp', 'jpeg'] }]
-    });
-
-    if (canceled || filePaths.length === 0) return null;
-
-    const sourcePath = filePaths[0];
-    
-    // 3. Получаем путь к папке данных пользователя (AppData/Roaming/название_вашего_апп)
-    const assetsFolder = path.join(userDataPath, 'user_assets');
-
-    // 4. Проверяем, существует ли папка, если нет — создаем
-    if (!fs.existsSync(assetsFolder)) {
-        fs.mkdirSync(assetsFolder, { recursive: true });
-    }
-
-    // 5. Формируем конечное имя и путь
-    const fileName = Date.now() + "_" + path.basename(sourcePath);
-    const destPath = path.join(assetsFolder, fileName);
-    
+ipcMain.handle('select-file', async (event) => {
     try {
+        // 1. Получаем окно для модальности
+        // Используем event.sender, чтобы диалог привязался именно к тому окну, которое сделало запрос
+        const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+        
+        // 2. Открываем диалог выбора файла
+        const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+            properties: ['openFile'],
+            filters: [{ name: 'Images', extensions: ['jpg', 'png', 'gif', 'webp', 'jpeg'] }]
+        });
+
+        if (canceled || filePaths.length === 0) {
+            return null;
+        }
+
+        const sourcePath = filePaths[0];
+        
+        // 3. Получаем путь к папке активов
+        const assetsFolder = path.join(userDataPath, 'user_assets');
+
+        // 4. Проверяем папку
+        if (!fs.existsSync(assetsFolder)) {
+            fs.mkdirSync(assetsFolder, { recursive: true });
+        }
+
+        // 5. Формируем путь
+        const fileName = `${Date.now()}_${path.basename(sourcePath)}`;
+        const destPath = path.join(assetsFolder, fileName);
+        
         // 6. Копируем файл
         fs.copyFileSync(sourcePath, destPath);
         
-        // 7. Возвращаем путь. 
-        // ВАЖНО: Добавляем протокол file://, чтобы Electron/Chrome разрешил загрузку
+        // 7. Формируем финальный путь
         const finalPath = `file://${destPath.replace(/\\/g, '/')}`;
-        console.log("Файл сохранен в:", finalPath);
+        
+        console.log("Система: Файл успешно скопирован в активы:", finalPath);
         return finalPath; 
+
     } catch (err) {
-        console.error("Ошибка при копировании файла:", err);
-        return null;
+        // Ловим ЛЮБУЮ ошибку (диалог, права доступа, отсутствие места на диске)
+        console.error("IPC Error [select-file]:", err);
+        
+        // Важно: возвращаем null в рендер, чтобы там поняли, что выбор не удался
+        return null; 
     }
 });
+
 // Запуск приложения
 app.whenReady().then(async () => {
     // 1. Сначала применяем прокси (если это нужно глобально до запуска окон)
@@ -517,42 +559,29 @@ app.whenReady().then(async () => {
         }
     });
     
-    // Alt+F7 - Play/Pause
-globalShortcut.register('Alt+F7', () => {
+    function broadcast(channel, data = null) {
     BrowserWindow.getAllWindows().forEach(win => {
-        win.webContents.send('execute-yandex-play');
+        try {
+            // Проверяем: окно существует + не уничтожено + страница НЕ в процессе загрузки
+            if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+                const url = win.webContents.getURL();
+                // Не шлем скрипты в пустые окна или системные страницы
+                if (url && url !== 'about:blank' && !url.startsWith('devtools://')) {
+                    win.webContents.send(channel, data);
+                }
+            }
+        } catch (e) {
+            console.error(`Ошибка отправки в окно: ${e.message}`);
+        }
     });
-});
+}
 
-// Alt+F6 - Next
-globalShortcut.register('Alt+F6', () => {
-    BrowserWindow.getAllWindows().forEach(win => {
-        win.webContents.send('execute-yandex-next');
-    });
-});
-
-// Alt+F5 - Previous
-globalShortcut.register('Alt+F5', () => {
-    BrowserWindow.getAllWindows().forEach(win => {
-        win.webContents.send('execute-yandex-prev');
-    });
-});
-
-    // Alt + Ё: Автоответ в Дискорде
-    globalShortcut.register('Alt+`', () => {
-        BrowserWindow.getAllWindows().forEach(win => {
-            win.webContents.send('execute-discord-answer');
-        });
-        console.log('Global Hotkey: Alt+Ё pressed');
-    });
-
-    // Ctrl + Shift + M: Автоответ в Дискорде
-    globalShortcut.register('Ctrl+Shift+M', () => {
-        BrowserWindow.getAllWindows().forEach(win => {
-            win.webContents.send('execute-discord-mute');
-        });
-        console.log('Global Hotkey: Ctrl+Shift+M pressed');
-    });
+// И тогда твои хоткеи превратятся в элегантные строчки:
+globalShortcut.register('Alt+F7', () => broadcast('execute-yandex-play'));
+globalShortcut.register('Alt+F6', () => broadcast('execute-yandex-next'));
+globalShortcut.register('Alt+F5', () => broadcast('execute-yandex-prev'));
+globalShortcut.register('Alt+`',  () => broadcast('execute-discord-answer'));
+globalShortcut.register('Ctrl+Shift+M',  () => broadcast('execute-discord-mute'));
 
     // --- ПРОВЕРКА ОБНОВЛЕНИЙ ---
     setTimeout(() => { 
